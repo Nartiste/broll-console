@@ -7,6 +7,7 @@ import { derive, variables, variablesBrutes, type DA } from "@/lib/da";
 import { EXEMPLES, LIBELLES, SLOTS, type FormeMotion, type Gabarit } from "@/lib/gabarits";
 import { Comp } from "./Vignette";
 import GabaritApercu from "./GabaritApercu";
+import Production from "./Production";
 import { majProjet, type Decision, type Etat, type Projet } from "@/lib/store";
 import Vignette from "./Vignette";
 
@@ -24,6 +25,7 @@ export default function Console({ initial }: { initial: Projet }) {
   });
   const [vise, setVise] = useState(1);
   const [charge, setCharge] = useState<string | null>(null);
+  const [prodOuverte, setProdOuverte] = useState(false);
   const modale = useRef<HTMLDialogElement>(null);
 
   /* Le plan se recompose localement à partir des choix : les curseurs
@@ -60,9 +62,11 @@ export default function Console({ initial }: { initial: Projet }) {
     if (!ins || ins.moteur !== "broll" || !ins.variantes?.length) return;
     setGeneration(g => ({ ...g, [n]: "en-cours" })); setGenErreur(null);
     try {
+      const note = dec(n).note?.trim();
+      const prompts = note ? ins.variantes.map(p => `${p} Retouche demandée : ${note}.`) : ins.variantes;
       const r = await fetch("/api/vignettes", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompts: ins.variantes }),
+        body: JSON.stringify({ prompts }),
       });
       const c = await r.json();
       if (!r.ok) throw new Error(c.erreur || "Génération impossible");
@@ -675,6 +679,12 @@ export default function Console({ initial }: { initial: Projet }) {
             })()}
           </div>
 
+          <div id="production" />
+          {(prodOuverte || projet.production) && (
+            <Production projet={projet} plan={plan} dec={dec} vars={vars} gabaritPour={gabaritPour}
+                        onMaj={prodn => { setProjet(p => ({ ...p, production: prodn })); majProjet(projet.id, { production: prodn }); }}
+                        onFermer={() => setProdOuverte(false)} />
+          )}
           <div className="planche">
             {plan.inserts.map(ins => {
               const d = dec(ins.n);
@@ -733,6 +743,7 @@ export default function Console({ initial }: { initial: Projet }) {
                                 disabled={generation[ins.n] === "en-cours"}
                                 onClick={e => { e.stopPropagation(); genererVignettes(ins.n); }}>
                           {generation[ins.n] === "en-cours" ? "Génération…"
+                            : d.etat === "presque" && d.note?.trim() ? "Relancer avec la retouche"
                             : d.images ? "Régénérer les 3 vignettes" : "Générer les 3 vignettes"}
                         </button>
                         {generation[ins.n] === "erreur" && <span style={{ color: "var(--alerte)", fontSize: 12 }}>échec — voir le message en haut</span>}
@@ -789,8 +800,11 @@ export default function Console({ initial }: { initial: Projet }) {
             </div>
             <div className="droite">
               <button className="btn fantome" onClick={produire}>Voir ce que reçoit la machine</button>
-              <button className="btn" disabled={reste > 0} onClick={produire}>
-                {reste > 0 ? `Encore ${reste} à trancher` : `Lancer la production · ${compte("oui") + compte("presque")} inserts`}
+              <button className="btn" disabled={reste > 0 || compte("oui") === 0}
+                      onClick={() => { setProdOuverte(true); document.getElementById("production")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
+                {reste > 0 ? `Encore ${reste} à trancher`
+                  : compte("oui") === 0 ? `Aucun insert gardé${compte("presque") ? ` · ${compte("presque")} à relancer` : ""}`
+                  : projet.production ? "Voir la production" : `Lancer la production · ${compte("oui")} insert${compte("oui") > 1 ? "s" : ""}`}
               </button>
             </div>
           </div>

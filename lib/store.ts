@@ -24,6 +24,29 @@ export interface Decision {
   images?: (string | null)[];
 }
 
+export type StatutProd = "attente" | "file" | "en-cours" | "pret" | "echec" | "sans-objet";
+
+export interface ArticleProd {
+  n: number;
+  fichier: string;          // NN-titre-court, sans extension
+  moteur: "broll" | "motion";
+  forme: string;
+  duree: number;
+  statut: StatutProd;
+  tache?: string;           // identifiant ModelArk
+  video?: string;           // URL du clip une fois prêt
+  erreur?: string;
+  prompt?: string;
+  image?: string | null;    // la vignette validée, référence du clip
+  html?: string;            // gabarit sur mesure rendu, autonome
+}
+
+export interface Production {
+  lancee: number;
+  resolution: string;
+  articles: ArticleProd[];
+}
+
 export interface Projet {
   id: string;
   titre: string;
@@ -36,6 +59,8 @@ export interface Projet {
   choix?: Choix[];
   palier?: "modele" | "deterministe";
   avertissement?: string | null;
+  /** La dernière production lancée : tâches, états, fichiers. Survit au rechargement. */
+  production?: Production;
 }
 
 const CLE = "broll-console:projets";
