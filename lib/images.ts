@@ -18,6 +18,10 @@ export type Resultat = { ok: true; images: Image[] } | { ok: false; erreur: stri
 export interface Fournisseur {
   id: string;
   nom: string;
+  /** Les variables d'environnement attendues, aux noms exacts. Sert de
+   *  liste de contrôle à /api/sante : une variable mal nommée est la panne
+   *  la plus fréquente, et la plus pénible à diagnostiquer à l'aveugle. */
+  variables: string[];
   /** Renvoie une URL directement exploitable comme référence vidéo, ou du base64
    *  qu'il faudra publier avant de s'en servir. */
   rendUneUrl: boolean;
@@ -37,6 +41,7 @@ const echec = (e: unknown): Resultat => ({
 const seedream: Fournisseur = {
   id: "seedream",
   nom: "Seedream (BytePlus ModelArk)",
+  variables: ["ARK_API_KEY"],
   rendUneUrl: true,
   configure: () => Boolean(process.env.ARK_API_KEY),
   async generer(prompt, opts) {
@@ -72,6 +77,7 @@ const seedream: Fournisseur = {
 const gemini: Fournisseur = {
   id: "gemini",
   nom: "Gemini (Google)",
+  variables: ["GEMINI_API_KEY"],
   rendUneUrl: false,
   configure: () => Boolean(process.env.GEMINI_API_KEY),
   async generer(prompt, opts) {
@@ -116,6 +122,7 @@ const gemini: Fournisseur = {
 const openai: Fournisseur = {
   id: "openai",
   nom: "OpenAI",
+  variables: ["OPENAI_API_KEY"],
   rendUneUrl: false,
   configure: () => Boolean(process.env.OPENAI_API_KEY),
   async generer(prompt, opts) {
@@ -151,16 +158,26 @@ const openai: Fournisseur = {
    d'attente du produit est réservée aux clips, qui prennent des minutes.
    Renvoie une URL — aucun dépôt de fichiers nécessaire. */
 
+/** Higgsfield attend un couple identifiant:secret. On accepte les deux façons
+ *  de le fournir — deux variables, ou une seule contenant « id:secret » —
+ *  parce qu'un identifiant collé dans la mauvaise case est une panne muette. */
+function identifiantsHiggsfield(): string | null {
+  const { HIGGSFIELD_KEY_ID: id, HIGGSFIELD_KEY_SECRET: secret, HIGGSFIELD_API_KEY: paire } = process.env;
+  if (id && secret) return `${id}:${secret}`;
+  if (paire && paire.includes(":")) return paire;
+  return null;
+}
+
 const higgsfield: Fournisseur = {
   id: "higgsfield",
   nom: "Higgsfield",
+  variables: ["HIGGSFIELD_KEY_ID + HIGGSFIELD_KEY_SECRET, ou HIGGSFIELD_API_KEY au format identifiant:secret"],
   rendUneUrl: true,
-  configure: () =>
-    Boolean(process.env.HIGGSFIELD_KEY_ID && process.env.HIGGSFIELD_KEY_SECRET),
+  configure: () => Boolean(identifiantsHiggsfield()),
   async generer(prompt, opts) {
     const base = process.env.HIGGSFIELD_BASE_URL || "https://api.higgsfield.ai";
     const chemin = process.env.HIGGSFIELD_PATH_IMAGE || "/higgsfield-ai/soul/v2/standard";
-    const auth = `Key ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`;
+    const auth = `Key ${identifiantsHiggsfield()}`;
     try {
       const r = await fetch(`${base}${chemin}`, {
         method: "POST",
@@ -208,7 +225,11 @@ export const fournisseur = (id?: string): Fournisseur => {
 };
 
 export const disponibles = () =>
-  FOURNISSEURS.map(f => ({ id: f.id, nom: f.nom, configure: f.configure(), rendUneUrl: f.rendUneUrl }));
+  FOURNISSEURS.map(f => ({
+    id: f.id, nom: f.nom, configure: f.configure(),
+    rendUneUrl: f.rendUneUrl, variables: f.variables,
+    depotRequis: !f.rendUneUrl,
+  }));
 
 /**
  * Trois prompts pour un même insert, dans le registre visuel du projet.

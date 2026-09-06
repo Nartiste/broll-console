@@ -129,20 +129,26 @@ export default function Depot({ compact = false }: { compact?: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   const [survol, setSurvol] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [lecture, setLecture] = useState(false);
 
+  /** Un script s'écrit dans un traitement de texte et s'exporte en PDF — c'est
+   *  la forme naturelle. Le texte brut est le cas particulier, pas l'inverse. */
   async function avaler(fichier: File) {
     setErreur(null);
-    if (fichier.size > 2_000_000) {
-      setErreur("Fichier trop lourd — un script tient en quelques dizaines de kilo-octets.");
-      return;
+    setLecture(true);
+    try {
+      const corps = new FormData();
+      corps.append("fichier", fichier);
+      const r = await fetch("/api/extraire", { method: "POST", body: corps });
+      const c = await r.json();
+      if (!r.ok) { setErreur(c.erreur || "Lecture impossible."); return; }
+      const p = creer(c.texte, fichier.name);
+      router.push(`/studio/${p.id}`);
+    } catch {
+      setErreur("Lecture impossible : le fichier n'a pas pu être envoyé.");
+    } finally {
+      setLecture(false);
     }
-    const texte = await fichier.text();
-    if (texte.trim().length < 80) {
-      setErreur("Ce fichier ne contient pas de script exploitable.");
-      return;
-    }
-    const p = creer(texte, fichier.name);
-    router.push(`/studio/${p.id}`);
   }
 
   function ouvrirExemple() {
@@ -163,24 +169,24 @@ export default function Depot({ compact = false }: { compact?: boolean }) {
         if (f) avaler(f);
       }}
     >
-      <h3>{survol ? "Lâchez, c'est bon" : "Déposez votre script ici"}</h3>
+      <h3>{lecture ? "Lecture du script…" : survol ? "Lâchez, c'est bon" : "Déposez votre script ici"}</h3>
       <p>
-        Un fichier texte au format prompteur — une idée par ligne, les mots accentués en
-        capitales, les directives entre crochets. L'analyse démarre au dépôt.
+        PDF, Word ou texte brut. Idéalement au format prompteur — une idée par ligne, les
+        mots accentués en capitales, les directives entre crochets. L'analyse démarre au dépôt.
       </p>
       {erreur && <p style={{ color: "var(--alerte)", marginTop: 10 }}>{erreur}</p>}
       <div className="ou">
-        <button className="btn" onClick={() => input.current?.click()}>
-          Choisir un fichier
+        <button className="btn" disabled={lecture} onClick={() => input.current?.click()}>
+          {lecture ? "Lecture…" : "Choisir un fichier"}
         </button>
-        <button className="btn fantome" onClick={ouvrirExemple}>
+        <button className="btn fantome" disabled={lecture} onClick={ouvrirExemple}>
           Essayer avec un script d'exemple
         </button>
       </div>
       <input
         ref={input}
         type="file"
-        accept=".txt,.md,.srt,text/plain"
+        accept=".pdf,.docx,.txt,.md,.srt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
         hidden
         onChange={e => { const f = e.target.files?.[0]; if (f) avaler(f); }}
       />
