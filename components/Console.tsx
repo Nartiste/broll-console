@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { analyser } from "@/lib/analyse";
-import { derive, variables } from "@/lib/da";
+import { composer, analyser } from "@/lib/analyse";
+import { derive, variables, type DA } from "@/lib/da";
 import { majProjet, type Decision, type Etat, type Projet } from "@/lib/store";
 import Vignette from "./Vignette";
 
@@ -19,10 +19,64 @@ export default function Console({ initial }: { initial: Projet }) {
   const [charge, setCharge] = useState<string | null>(null);
   const modale = useRef<HTMLDialogElement>(null);
 
+  /* Le plan se recompose localement à partir des choix : les curseurs
+     restent instantanés. Le modèle n'est appelé qu'une fois — au montage,
+     ou sur demande — et le déterministe sert d'attente et de filet. */
   const plan = useMemo(
-    () => analyser(projet.script, projet.cadrage, projet.da.registre, projet.titre),
-    [projet.script, projet.cadrage, projet.da.registre, projet.titre],
+    () => projet.choix
+      ? composer(projet.script, projet.cadrage, projet.choix, projet.titre)
+      : analyser(projet.script, projet.cadrage, projet.da.registre, projet.titre),
+    [projet.script, projet.cadrage, projet.choix, projet.da.registre, projet.titre],
   );
+
+  const [analyse, setAnalyse] = useState<"repos" | "en-cours" | "erreur">("repos");
+  const [charteEtat, setCharteEtat] = useState<"repos" | "en-cours" | "erreur">("repos");
+  const [charteErreur, setCharteErreur] = useState<string | null>(null);
+  const refsInput = useRef<HTMLInputElement>(null);
+
+  async function lancerAnalyse() {
+    setAnalyse("en-cours");
+    try {
+      const r = await fetch("/api/analyse", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ script: projet.script, cadrage: projet.cadrage,
+                               registre: projet.da.registre, titre: projet.titre }),
+      });
+      const c = await r.json();
+      if (!r.ok) throw new Error(c.erreur || "Analyse impossible");
+      const patch = { choix: c.choix, palier: c.palier, avertissement: c.avertissement || null,
+                      titre: c.titre || projet.titre };
+      setProjet(p => ({ ...p, ...patch }));
+      majProjet(projet.id, patch);
+      setAnalyse("repos");
+    } catch { setAnalyse("erreur"); }
+  }
+
+  useEffect(() => { if (!projet.choix) lancerAnalyse(); /* eslint-disable-line */ }, []);
+
+  async function extraireCharte(fichiers: FileList | File[]) {
+    const liste = Array.from(fichiers);
+    if (!liste.length) return;
+    setCharteEtat("en-cours"); setCharteErreur(null);
+    try {
+      const corps = new FormData();
+      liste.forEach(f => corps.append("fichiers", f));
+      const r = await fetch("/api/charte", { method: "POST", body: corps });
+      const c = await r.json();
+      if (!r.ok) throw new Error(c.erreur || "Extraction impossible");
+      const da: DA = { ...projet.da, ...c.charte };
+      // Les prompts de B-roll portent le registre : une nouvelle charte
+      // invalide le jugement précédent, on relance l'analyse.
+      const patch = { da, choix: undefined, palier: undefined };
+      setProjet(p => ({ ...p, ...patch }));
+      majProjet(projet.id, patch);
+      setCharteEtat("repos");
+      lancerAnalyse();
+    } catch (e) {
+      setCharteEtat("erreur");
+      setCharteErreur(e instanceof Error ? e.message : "Extraction impossible");
+    }
+  }
 
   const dec = (n: number): Decision => projet.decisions[n] || VIDE;
 
@@ -74,7 +128,7 @@ export default function Console({ initial }: { initial: Projet }) {
   const motions = plan.inserts.filter(i => i.moteur === "motion" && dec(i.n).etat !== "non");
   const secondes = brolls.reduce((t, i) => t + Math.min(i.duree, projet.cadrage.dureeMax), 0);
 
-  const conformite = derive(projet.da.accent, "#A8CB77");
+  const conformite = projet.da.mesure ? derive(projet.da.accent, projet.da.mesure.accent) : null;
 
   function produire() {
     setCharge(JSON.stringify({
@@ -108,6 +162,17 @@ export default function Console({ initial }: { initial: Projet }) {
             <span>{plan.ecartes} passages écartés</span>
             <span>{plan.alertes.length} alerte(s) de rythme</span>
           </div>
+        </div>
+        <div className="droite" style={{ alignItems: "center" }}>
+          <span className="pilule" title={projet.avertissement || ""}>
+            {analyse === "en-cours" ? "analyse en cours…"
+              : projet.palier === "modele" ? "jugé par le modèle"
+              : analyse === "erreur" ? "analyse par modèle indisponible"
+              : "analyse déterministe"}
+          </span>
+          <button className="btn fantome" disabled={analyse === "en-cours"} onClick={lancerAnalyse}>
+            Réanalyser
+          </button>
         </div>
       </header>
 
@@ -176,58 +241,98 @@ export default function Console({ initial }: { initial: Projet }) {
       {porte === 2 && (
         <div className="duo">
           <div className="carte">
+            <span className="eyebrow">Références</span>
+            <h3 style={{ marginTop: 8 }}>D&apos;où vient la charte</h3>
+            <div
+              className={"depot"}
+              style={{ marginTop: 14, padding: "26px 18px" }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => { e.preventDefault(); extraireCharte(e.dataTransfer.files); }}
+            >
+              <h3 style={{ fontSize: 16 }}>
+                {charteEtat === "en-cours" ? "Lecture des références…" : "Déposez votre moodboard et votre charte"}
+              </h3>
+              <p>
+                Captures de typographies, rendus repérés ailleurs, photos de référence, document de
+                charte en PDF ou Word. La charte n&apos;est pas saisie : elle est déduite de la matière.
+              </p>
+              {charteErreur && <p style={{ color: "var(--alerte)", marginTop: 8 }}>{charteErreur}</p>}
+              <div className="ou">
+                <button className="btn" disabled={charteEtat === "en-cours"}
+                        onClick={() => refsInput.current?.click()}>
+                  {charteEtat === "en-cours" ? "Extraction…" : "Choisir des fichiers"}
+                </button>
+              </div>
+              <input ref={refsInput} type="file" multiple hidden
+                     accept=".png,.jpg,.jpeg,.webp,.gif,.pdf,.docx,.txt,.md"
+                     onChange={e => { if (e.target.files) extraireCharte(e.target.files); }} />
+            </div>
+            {projet.da.sources?.length ? (
+              <>
+                <div className="eyebrow" style={{ marginTop: 16 }}>Ce que chaque référence a apporté</div>
+                <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 13, color: "var(--encre-2)", lineHeight: 1.5 }}>
+                  {projet.da.sources.map((x, i) => <li key={i}>{x}</li>)}
+                </ul>
+              </>
+            ) : null}
+          </div>
+
+          <div className="carte">
             <span className="eyebrow">Charte du projet</span>
             <h3 style={{ marginTop: 8 }}>{projet.da.nom}</h3>
+            {projet.da.resume && <p className="pourquoi" style={{ marginTop: 6 }}>{projet.da.resume}</p>}
             <div className="nuancier">
               {([["Fond", projet.da.fond, projet.da.encre],
-                 ["Encre", projet.da.encre, "#fff"],
+                 ["Encre", projet.da.encre, projet.da.fond],
                  ["Accent", projet.da.accent, projet.da.fondSombre],
-                 ["Secondaire", projet.da.secondaire, "#fff"]] as const).map(([l, c, t]) => (
+                 ["Secondaire", projet.da.secondaire, projet.da.fond]] as const).map(([l, c, t]) => (
                 <div className="teinte" key={l} style={{ background: c, color: t }}>
                   <span>{l}</span><b>{c.toUpperCase()}</b>
                 </div>
               ))}
             </div>
-            <p className="pourquoi">
-              La charte est une donnée du projet, pas du code. Elle sera extraite de votre
-              moodboard : captures de typographies, rendus repérés ailleurs, photos de référence.
-            </p>
-            <label className="eyebrow" style={{ display: "block", marginTop: 16 }}>Registre visuel des B-roll</label>
-            <input className="champ" style={{ marginTop: 8 }} value={projet.da.registre}
-                   onChange={e => {
-                     const da = { ...projet.da, registre: e.target.value };
-                     setProjet(p => ({ ...p, da }));
-                     majProjet(projet.id, { da });
-                   }} />
-          </div>
-
-          <div className="carte">
-            <span className="eyebrow">Contrôle de conformité</span>
-            <p className="pourquoi" style={{ marginTop: 8 }}>
-              Le modèle approxime la charte, il ne la respecte pas. Mesuré sur un rendu de
-              référence, contre l&apos;accent attendu :
-            </p>
-            <div className="controle">
-              <div className="l">
-                <span>Teinte</span>
-                <span className="mono muet">{conformite.teinte.attendu}° attendu · {conformite.teinte.mesure}° mesuré</span>
-                <span className={"etatp " + (conformite.teinte.ok ? "ok" : "ko")}>
-                  {conformite.teinte.ok ? "conforme" : "dérive"}
-                </span>
-              </div>
-              <div className="l">
-                <span>Saturation</span>
-                <span className="mono muet">{conformite.saturation.attendu} % attendu · {conformite.saturation.mesure} % mesuré</span>
-                <span className={"etatp " + (conformite.saturation.ok ? "ok" : "ko")}>
-                  {conformite.saturation.ok ? "conforme" : "dérive"}
-                </span>
-              </div>
+            <div style={{ marginTop: 14, fontFamily: projet.da.policeTitre, fontWeight: projet.da.graisseTitre,
+                          letterSpacing: projet.da.interlettrage, fontSize: 26, lineHeight: 1 }}>
+              Titre · {projet.da.policeTitre.split(",")[0].replace(/['"]/g, "")}
             </div>
+            <div className="muet" style={{ marginTop: 6, fontSize: 12, fontFamily: projet.da.policeUtil }}>
+              Utilitaire · {projet.da.policeUtil.split(",")[0].replace(/['"]/g, "")} · rayon {projet.da.rayon}px · pilule {projet.da.rayonPilule}px · rotation {projet.da.rotation}
+            </div>
+
+            <label className="eyebrow" style={{ display: "block", marginTop: 18 }}>Registre visuel des B-roll</label>
+            <textarea className="champ" style={{ marginTop: 8, minHeight: 70, resize: "vertical" }}
+                      value={projet.da.registre}
+                      onChange={e => {
+                        const da = { ...projet.da, registre: e.target.value };
+                        setProjet(p => ({ ...p, da }));
+                        majProjet(projet.id, { da });
+                      }} />
             <p className="pourquoi">
-              D&apos;où la passe de mise en charte après génération : chaque clip est recalé sur
-              la palette avant d&apos;entrer dans le dossier. Sans elle, tous les plans sont
-              légèrement hors charte — invisible plan par plan, sensible sur quinze minutes.
+              Cette phrase est placée devant chaque génération d&apos;image. Si vous la changez à la main,
+              cliquez « Réanalyser » pour que les prompts la reprennent.
             </p>
+
+            <div className="eyebrow" style={{ marginTop: 18 }}>Contrôle de conformité</div>
+            {conformite ? (
+              <div className="controle">
+                <div className="l">
+                  <span>Teinte</span>
+                  <span className="mono muet">{conformite.teinte.attendu}° attendu · {conformite.teinte.mesure}° mesuré</span>
+                  <span className={"etatp " + (conformite.teinte.ok ? "ok" : "ko")}>{conformite.teinte.ok ? "conforme" : "dérive"}</span>
+                </div>
+                <div className="l">
+                  <span>Saturation</span>
+                  <span className="mono muet">{conformite.saturation.attendu} % attendu · {conformite.saturation.mesure} % mesuré</span>
+                  <span className={"etatp " + (conformite.saturation.ok ? "ok" : "ko")}>{conformite.saturation.ok ? "conforme" : "dérive"}</span>
+                </div>
+              </div>
+            ) : (
+              <p className="pourquoi">
+                Aucun rendu mesuré pour l&apos;instant. Dès qu&apos;une image sera générée, sa dérive
+                par rapport à l&apos;accent sera relevée ici — le modèle approxime la charte, il ne la
+                respecte pas, et c&apos;est ce qui justifie la passe de mise en charte.
+              </p>
+            )}
           </div>
         </div>
       )}

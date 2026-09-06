@@ -22,6 +22,9 @@ export interface DA {
   rayonPilule: number;
   rotation: string;        // superposition, ex. "-3deg"
   registre: string;        // le monde visuel des B-roll générés
+  resume?: string;         // ce que la charte est, en trois phrases
+  sources?: string[];      // les références dont elle a été extraite
+  mesure?: { accent: string; fond: string; sur: string };  // dérive relevée sur un rendu réel
 }
 
 /** DA neutre par défaut. Aucune identité de marque dans le dépôt. */

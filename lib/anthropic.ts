@@ -14,8 +14,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import { blocsDuScript, composer, type Cadrage, type Choix, type Plan } from "./analyse";
+import { blocsDuScript, type Choix } from "./analyse";
 import { troisPrompts } from "./images";
+import type { DA } from "./da";
 
 export const configure = () => Boolean(process.env.ANTHROPIC_API_KEY);
 
@@ -111,10 +112,9 @@ function versParams(r: z.infer<typeof Retenu>): Record<string, unknown> | undefi
 
 export async function analyserAvecClaude(
   script: string,
-  cadrage: Cadrage,
   registre: string,
   titreDefaut: string,
-): Promise<Plan> {
+): Promise<{ choix: Choix[]; titre: string }> {
   const client = new Anthropic();
   const blocs = blocsDuScript(script);
 
@@ -154,5 +154,85 @@ export async function analyserAvecClaude(
     }));
 
   // Le rythme reste déterministe : le modèle a jugé le fond, pas l'allocation.
-  return composer(script, cadrage, choix, sortie.titre || titreDefaut);
+  // C'est l'appelant qui compose — et qui recompose à chaque réglage du
+  // cadrage, sans repasser par le modèle.
+  return { choix, titre: sortie.titre || titreDefaut };
+}
+
+/* ------------------------------------------------------------ la charte */
+
+const Hex = z.string().regex(/^#[0-9A-Fa-f]{6}$/).describe("couleur hexadécimale, ex. #1A1A1A");
+
+const Charte = z.object({
+  nom: z.string().describe("nom court de la direction artistique, 2 à 4 mots"),
+  resume: z.string().describe("trois phrases : l'esthétique, ce qui la rend reconnaissable, ce qu'elle refuse"),
+  fond: Hex.describe("fond principal, mode clair"),
+  encre: Hex.describe("texte principal sur le fond clair"),
+  accent: Hex.describe("LA couleur d'accent — celle qui signe la marque"),
+  secondaire: Hex.describe("texte secondaire"),
+  fondSombre: Hex.describe("fond du mode sombre"),
+  encreSombre: Hex.describe("texte sur le fond sombre"),
+  policeTitre: z.string().describe("famille de police des titres, telle qu'on l'écrirait en CSS, avec repli"),
+  policeUtil: z.string().describe("police utilitaire pour étiquettes et chiffres, en CSS, avec repli"),
+  graisseTitre: z.number().int().min(300).max(900).describe("graisse des titres : 400, 700, 800 ou 900"),
+  interlettrage: z.string().describe("letter-spacing des titres en em, ex. -0.04em"),
+  rayon: z.number().int().min(0).max(48).describe("rayon des cartes en px"),
+  rayonPilule: z.number().int().min(0).max(100).describe("rayon des badges : 100 pour une pilule, 4 pour un rectangle"),
+  rotation: z.string().describe("rotation des superpositions en deg, ex. -3deg, ou 0deg"),
+  registre: z.string().describe("le monde visuel des B-roll générés, en une phrase de prompt : matière, lumière, palette, caméra. Ce texte préfixera chaque génération."),
+  sources: z.array(z.string()).describe("pour chaque référence fournie, en une ligne, ce qu'elle a apporté à la charte"),
+});
+
+const CONSIGNE_CHARTE = `Tu extrais une direction artistique exploitable par une machine à partir de références visuelles et documentaires.
+
+On te donne un moodboard — captures d'écran, rendus repérés chez d'autres créateurs, photos — et parfois un document de charte. Tu en déduis une charte COMPLÈTE et COHÉRENTE : palette, typographie, formes, et le registre visuel des images à générer.
+
+Règles :
+1. **Un document de charte fait foi** sur les valeurs qu'il fixe (codes couleur, polices). Le moodboard précise le reste — et surtout le registre des images.
+2. **Tranche.** Une charte est une décision, pas une moyenne. Si les références divergent, choisis la direction dominante et dis-le dans le résumé.
+3. **Les valeurs sont concrètes.** Des hex à six chiffres, des polices nommées, des nombres. Rien d'approximatif.
+4. **Le registre est un prompt.** C'est la phrase qui sera placée devant chaque génération d'image : décris la matière, la lumière, la palette, le style de caméra, ce qui doit toujours y être et ce qui ne doit jamais y être. Vise 25 à 45 mots.
+5. Tout en français.`;
+
+export interface Reference {
+  nom: string;
+  type: "image" | "pdf" | "texte";
+  donnees: string;     // base64 pour image et pdf, texte brut sinon
+  mime?: string;
+}
+
+export async function extraireCharte(refs: Reference[]): Promise<DA & { resume: string; sources: string[] }> {
+  const client = new Anthropic();
+
+  const contenu: Anthropic.ContentBlockParam[] = [];
+  for (const r of refs) {
+    contenu.push({ type: "text", text: `Référence : ${r.nom}` });
+    if (r.type === "image") {
+      contenu.push({
+        type: "image",
+        source: { type: "base64", media_type: (r.mime || "image/png") as any, data: r.donnees },
+      });
+    } else if (r.type === "pdf") {
+      contenu.push({
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data: r.donnees },
+      });
+    } else {
+      contenu.push({ type: "text", text: r.donnees.slice(0, 40_000) });
+    }
+  }
+  contenu.push({ type: "text", text: "Déduis la charte." });
+
+  const reponse = await client.messages.parse({
+    model: "claude-opus-5",
+    max_tokens: 8000,
+    thinking: { type: "adaptive" },
+    output_config: { format: zodOutputFormat(Charte), effort: "high" },
+    system: CONSIGNE_CHARTE,
+    messages: [{ role: "user", content: contenu }],
+  });
+
+  const c = reponse.parsed_output;
+  if (!c) throw new Error("Le modèle n'a pas renvoyé de charte exploitable.");
+  return c;
 }

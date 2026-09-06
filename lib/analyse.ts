@@ -389,15 +389,13 @@ export function composer(
  * grammaticales, et insuffisant pour juger ce qui mérite une image — d'où le
  * palier modèle, qui remplit exactement la même structure `Choix`.
  */
-export function analyser(
+export function choixDeterministes(
   script: string,
-  cadrage: Cadrage = CADRAGE_DEFAUT,
   registre = "3D stylisée, lignes lumineuses sur fond sombre",
-  titre = "Sans titre",
-): Plan {
+): Choix[] {
   const { blocs } = decouper(script);
 
-  const choix: Choix[] = blocs
+  return blocs
     .map((b, i) => ({ b, i }))
     .filter(({ b }) => b.mots >= 3)
     .map(({ b, i }) => {
@@ -415,6 +413,13 @@ export function analyser(
         variantes: a.moteur === "broll" ? prompts(b, registre) : undefined,
       };
     });
+}
 
-  return composer(script, cadrage, choix, titre);
+export function analyser(
+  script: string,
+  cadrage: Cadrage = CADRAGE_DEFAUT,
+  registre = "3D stylisée, lignes lumineuses sur fond sombre",
+  titre = "Sans titre",
+): Plan {
+  return composer(script, cadrage, choixDeterministes(script, registre), titre);
 }

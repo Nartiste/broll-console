@@ -9,7 +9,7 @@
  * de données.
  */
 
-import { analyser, CADRAGE_DEFAUT, type Cadrage, type Plan } from "./analyse";
+import { analyser, composer, CADRAGE_DEFAUT, type Cadrage, type Choix, type Plan } from "./analyse";
 import { DA_NEUTRE, type DA } from "./da";
 
 export type Etat = "oui" | "presque" | "non" | null;
@@ -29,6 +29,10 @@ export interface Projet {
   cadrage: Cadrage;
   da: DA;
   decisions: Record<number, Decision>;
+  /** Le jugement, tel que renvoyé par l'analyse. Absent tant qu'elle n'a pas tourné. */
+  choix?: Choix[];
+  palier?: "modele" | "deterministe";
+  avertissement?: string | null;
 }
 
 const CLE = "broll-console:projets";
@@ -81,5 +85,8 @@ export function supprimer(id: string) {
   ecrire(lire().filter(p => p.id !== id));
 }
 
+/** Le plan se recompose localement à partir des choix : les curseurs du
+ *  cadrage restent instantanés, le modèle n'est pas rappelé. */
 export const planDe = (p: Projet): Plan =>
-  analyser(p.script, p.cadrage, p.da.registre, p.titre);
+  p.choix ? composer(p.script, p.cadrage, p.choix, p.titre)
+          : analyser(p.script, p.cadrage, p.da.registre, p.titre);
