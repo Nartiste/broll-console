@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { composer, analyser } from "@/lib/analyse";
 import { derive, variables, variablesBrutes, type DA } from "@/lib/da";
-import { EXEMPLES, SLOTS, type FormeMotion, type Gabarit } from "@/lib/gabarits";
+import { EXEMPLES, LIBELLES, SLOTS, type FormeMotion, type Gabarit } from "@/lib/gabarits";
+import { Comp } from "./Vignette";
 import GabaritApercu from "./GabaritApercu";
 import { majProjet, type Decision, type Etat, type Projet } from "@/lib/store";
 import Vignette from "./Vignette";
@@ -16,7 +17,11 @@ const tc = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).pa
 
 export default function Console({ initial }: { initial: Projet }) {
   const [projet, setProjet] = useState(initial);
-  const [porte, setPorte] = useState<1 | 2 | 3>(1);
+  const [porte, setPorte] = useState<1 | 2 | 3>(() => {
+    if (typeof window === "undefined") return 1;
+    const e = Number(new URLSearchParams(window.location.search).get("etape"));
+    return e === 2 || e === 3 ? e : 1;
+  });
   const [vise, setVise] = useState(1);
   const [charge, setCharge] = useState<string | null>(null);
   const modale = useRef<HTMLDialogElement>(null);
@@ -259,12 +264,17 @@ export default function Console({ initial }: { initial: Projet }) {
       </header>
 
       <div className="etapes">
-        {([[1, "Cadrage"], [2, "Direction artistique"], [3, "La planche"]] as const).map(([n, l]) => (
+        {([[1, "Cadrage"], [2, "Charte"], [3, "Planche"]] as const).map(([n, l]) => (
           <button key={n} aria-current={porte === n} onClick={() => setPorte(n)}>
-            <span className="n">Porte {n}</span> {l}
+            <span className="n">Étape {n}</span> {l}
           </button>
         ))}
       </div>
+      <p className="muet" style={{ marginTop: -12, marginBottom: 20, fontSize: 13.5 }}>
+        {porte === 1 && "Bornez le coût avant la première génération : combien d'inserts, combien de secondes, quelle part de B-roll."}
+        {porte === 2 && "Montrez votre charte — elle est déduite de vos références —, corrigez-la, puis ajoutez vos propres composants."}
+        {porte === 3 && "Triez les inserts un par un. Rien n'est généré, rien n'est facturé sans votre clic."}
+      </p>
 
       {porte === 1 && (
         <div className="reglages">
@@ -502,18 +512,32 @@ export default function Console({ initial }: { initial: Projet }) {
               devient un gabarit. La planche s&apos;en sert à la place du gabarit intégré de même forme.
             </p>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, marginTop: 14, alignItems: "end" }}>
-              <div>
-                <label className="eyebrow">Ce que le composant doit porter</label>
-                <select className="champ" style={{ marginTop: 6 }} value={gabForme}
-                        onChange={e => setGabForme(e.target.value as FormeMotion | "")}>
-                  <option value="">Laisser le modèle choisir</option>
-                  {(Object.keys(SLOTS) as FormeMotion[]).map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
-              </div>
-              <button className="btn" disabled={gabEtat === "en-cours"} onClick={() => gabInput.current?.click()}>
-                {gabEtat === "en-cours" ? "Extraction…" : "Déposer une capture"}
+            <div className="eyebrow" style={{ marginTop: 16 }}>Ce que le composant doit porter</div>
+            <p className="muet" style={{ fontSize: 13, marginTop: 4 }}>
+              Neuf formes de contenu. Chacune est montrée ici avec le gabarit intégré, dans votre charte —
+              c&apos;est ce que votre composant remplacera.
+            </p>
+            <div className="formes">
+              <button className={"forme" + (gabForme === "" ? " on" : "")} onClick={() => setGabForme("")}>
+                <div className="vignette" style={{ display: "grid", placeItems: "center", background: "var(--surface-2)" }}>
+                  <span className="muet" style={{ fontSize: 12, padding: 12, textAlign: "center" }}>Le modèle choisit la forme d&apos;après la capture</span>
+                </div>
+                <b>Au choix du modèle</b>
+                <span>Si vous ne savez pas laquelle : il regarde le composant et décide.</span>
               </button>
+              {(Object.keys(LIBELLES) as FormeMotion[]).map(f => (
+                <button key={f} className={"forme" + (gabForme === f ? " on" : "")} onClick={() => setGabForme(f)}>
+                  <div className="vignette"><Comp forme={f} params={EXEMPLES[f]} i={0} /></div>
+                  <b>{LIBELLES[f].nom}</b>
+                  <span>{LIBELLES[f].quoi}</span>
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 14, flexWrap: "wrap" }}>
+              <button className="btn" disabled={gabEtat === "en-cours"} onClick={() => gabInput.current?.click()}>
+                {gabEtat === "en-cours" ? "Extraction…" : `Déposer une capture${gabForme ? " · " + LIBELLES[gabForme].nom : ""}`}
+              </button>
+              <span className="muet" style={{ fontSize: 12.5 }}>Un bouton, une carte, un bandeau — une image du composant que vous aimez.</span>
               <input ref={gabInput} type="file" hidden accept=".png,.jpg,.jpeg,.webp,.gif"
                      onChange={e => { const f = e.target.files?.[0]; if (f) extraireGabarit([f]); e.target.value = ""; }} />
             </div>
@@ -529,7 +553,7 @@ export default function Console({ initial }: { initial: Projet }) {
                     <div style={{ padding: "10px 12px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <b style={{ fontSize: 14 }}>{g.nom}</b>
-                        <span className="tag motion" style={{ marginLeft: "auto" }}>{g.forme}</span>
+                        <span className="tag motion" style={{ marginLeft: "auto" }}>{LIBELLES[g.forme].nom}</span>
                       </div>
                       <p className="muet" style={{ fontSize: 12, marginTop: 4, lineHeight: 1.45 }}>{g.description}</p>
                       {g.source && <p className="mono muet" style={{ fontSize: 10.5, marginTop: 4 }}>d&apos;après {g.source}</p>}
@@ -641,7 +665,7 @@ export default function Console({ initial }: { initial: Projet }) {
                     <div className="rang">
                       <span className="num">{ins.n}</span>
                       <span className={"tag" + (ins.moteur === "motion" ? " motion" : "")}>
-                        {ins.moteur === "motion" ? `Motion · ${ins.forme}` : "B-roll"}
+                        {ins.moteur === "motion" ? `Motion · ${LIBELLES[ins.forme as FormeMotion]?.nom || ins.forme}` : "B-roll"}
                       </span>
                       <span className="tc">{tc(ins.entree)} · {ins.duree}s</span>
                     </div>

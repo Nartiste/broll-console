@@ -40,6 +40,21 @@ export const SLOTS: Record<FormeMotion, string> = {
   "pyramide":    "{{#niveaux}}{{.}}{{/niveaux}} (du socle au sommet)",
 };
 
+/** Ce que chaque forme est, dit pour un humain. Les identifiants (liste-3,
+ *  mot-choc…) sont un contrat entre l'analyse et le rendu — pas un vocabulaire
+ *  d'interface. Personne ne choisit un gabarit sur un nom de variable. */
+export const LIBELLES: Record<FormeMotion, { nom: string; quoi: string }> = {
+  "liste-3":      { nom: "Liste de 3",     quoi: "Trois éléments nommés — une règle des 3C, trois piliers." },
+  "liste-5":      { nom: "Liste de 5",     quoi: "Un framework en cinq points." },
+  "mot-choc":     { nom: "Mot-choc",       quoi: "Une formule seule à l'écran, en capitales." },
+  "chiffre":      { nom: "Chiffre",        quoi: "Une valeur et sa légende." },
+  "duo-chiffres": { nom: "Deux chiffres",  quoi: "Deux valeurs mises en regard." },
+  "avant-apres":  { nom: "Avant / après",  quoi: "Une trajectoire chiffrée, d'hier à aujourd'hui." },
+  "opposition":   { nom: "Opposition",     quoi: "Deux idées face à face, l'une l'emporte." },
+  "barres":       { nom: "Barres",         quoi: "Des pourcentages comparés." },
+  "pyramide":     { nom: "Pyramide",       quoi: "Des niveaux, du socle au sommet." },
+};
+
 /** Contenu d'exemple par forme, pour prévisualiser un gabarit hors planche. */
 export const EXEMPLES: Record<FormeMotion, Record<string, any>> = {
   "liste-3":     { titre: "La règle des 3C", items: ["Compétence", "Cohérence", "Confiance"] },

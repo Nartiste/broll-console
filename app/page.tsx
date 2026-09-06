@@ -96,7 +96,7 @@ export default function Accueil() {
         <div className="l-tete">
           <div>
             <span className="l-eyebrow">Comment ça marche</span>
-            <h2>Trois portes avant la moindre dépense</h2>
+            <h2>Trois étapes avant la moindre dépense</h2>
           </div>
         </div>
         <div className="l-etapes">
@@ -107,12 +107,12 @@ export default function Accueil() {
           </div>
           <div>
             <span className="l-code">02</span>
-            <h3>Direction artistique</h3>
+            <h3>Charte</h3>
             <p>Vous ne décrivez pas votre charte : vous la montrez. Moodboard, document, captures — elle en est déduite, puis corrigée à la main ou sur consigne.</p>
           </div>
           <div>
             <span className="l-code">03</span>
-            <h3>La planche</h3>
+            <h3>Planche</h3>
             <p>Trois vignettes par insert. Garder, presque, écarter — et une raison en un clic, qui remonte pour diagnostiquer la charte plutôt que les images une par une.</p>
           </div>
         </div>

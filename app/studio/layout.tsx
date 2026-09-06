@@ -13,7 +13,7 @@ export default function CoqueStudio({ children }: { children: React.ReactNode })
           <Link href="/studio" className="actif">Projets</Link>
         </nav>
         <p className="muet" style={{ fontSize: 12, lineHeight: 1.5, margin: 0 }}>
-          Chartes et gabarits vivent dans chaque projet, Porte 2. Une bibliothèque commune viendra avec les comptes.
+          Chartes et gabarits vivent dans chaque projet, à l'étape 2 — Charte. Une bibliothèque commune viendra avec les comptes.
         </p>
         <div className="bas">
           <Compte />

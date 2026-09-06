@@ -300,3 +300,12 @@ dialog { border: none; border-radius: var(--r-l); padding: 0; max-width: 720px; 
 dialog::backdrop { background: rgba(0, 0, 0, .6); }
 dialog .in { padding: 24px; }
 pre { background: var(--fond); border: 1px solid var(--trait); border-radius: 12px; padding: 14px; overflow-x: auto; font-family: var(--mono); font-size: 11.5px; line-height: 1.5; max-height: 50vh; }
+
+/* choix visuel d'une forme de contenu */
+.formes { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-top: 12px; }
+.forme { text-align: left; border: 1.5px solid var(--trait); border-radius: 14px; overflow: hidden; background: var(--surface-2); display: flex; flex-direction: column; padding: 0 0 10px; transition: border-color .12s; }
+.forme:hover { border-color: var(--trait-fort); }
+.forme.on { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+.forme .vignette { border-radius: 0; }
+.forme b { font-size: 13.5px; padding: 9px 11px 0; }
+.forme span { font-size: 11.5px; color: var(--encre-2); padding: 3px 11px 0; line-height: 1.4; }

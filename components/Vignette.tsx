@@ -83,12 +83,14 @@ function dessiner(cv: HTMLCanvasElement, graine: number, accent: string) {
   x.fill();
 }
 
-function Comp({ ins, i }: { ins: Insert; i: number }) {
-  const q = ins.params || {};
+/** Le gabarit intégré d'une forme, rendu dans la charte du projet. Exporté :
+ *  il sert aussi à MONTRER les formes là où on les choisit. */
+export function Comp({ forme, params, i }: { forme: string; params?: Record<string, any>; i: number }) {
+  const q = params || {};
   const mode = i === 1 ? "sombre" : "clair";
   const glow = <span className="glow" />;
 
-  switch (ins.forme) {
+  switch (forme) {
     case "liste-3":
     case "liste-5":
       return (
@@ -197,7 +199,7 @@ export default function Vignette({ ins, i, accent, gabarit, vars, image }: {
       {ins.moteur === "motion" ? (
         gabarit && vars
           ? <GabaritApercu gabarit={gabarit} params={ins.params || {}} vars={vars} sombre={i === 1} />
-          : <Comp ins={ins} i={i} />
+          : <Comp forme={ins.forme} params={ins.params} i={i} />
       ) : image ? (
         <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
       ) : (

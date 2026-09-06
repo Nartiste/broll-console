@@ -35,7 +35,7 @@ production                        ← seuls les inserts validés partent en gén
 dossier numéroté en ordre de script
 ```
 
-## Les trois portes
+## Les trois étapes
 
 1. **Cadrage** — nombre maximum d'inserts, durée maximum de chacun, débit de parole. Ces trois
    curseurs bornent le coût de la vidéo *avant* la première génération.
@@ -54,7 +54,7 @@ abîme le résultat.
 | Nature                  | génération probabiliste | gabarit paramétré, rendu |
 | Coût                    | par clip, à chaque essai| une fois, à la fabrication |
 | Résultat                | imprévisible            | prévisible               |
-| Porte de validation     | **indispensable**       | inutile                  |
+| Validation avant dépense | **indispensable**       | inutile                  |
 | Texte lisible à l'écran | impossible              | natif                    |
 
 L'aiguillage se déduit du croisement **imageabilité × abstraction** du passage. Ce qui est
@@ -80,7 +80,7 @@ app/page.tsx              la page de vente et le dépôt du script
 app/login/                connexion (Supabase Auth à brancher)
 app/studio/               la coque de l'application
 app/studio/[projet]/      un projet ouvert
-components/Console.tsx    les trois portes
+components/Console.tsx    les trois étapes
 components/Vignette.tsx   rendu des gabarits, aperçus factices pour les B-roll
 lib/analyse.ts            notation puis allocation sous contrainte
 lib/da.ts                 la charte comme configuration, et le contrôle de dérive

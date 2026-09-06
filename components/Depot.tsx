@@ -147,7 +147,7 @@ export default function Depot({ compact = false }: { compact?: boolean }) {
       // souvent une charte ou un document déposé au mauvais endroit. On demande.
       if (c.prompteur === false) {
         setDoute({ texte: c.texte, nom: fichier.name,
-                   message: "Aucune directive entre crochets, aucune ligne courte : ce fichier ressemble à un document, pas à un script. Une charte se dépose dans le projet, Porte 2 — pas ici." });
+                   message: "Aucune directive entre crochets, aucune ligne courte : ce fichier ressemble à un document, pas à un script. Une charte se dépose dans le projet, à l'étape 2 — Charte — pas ici." });
         return;
       }
       const p = creer(c.texte, fichier.name);
