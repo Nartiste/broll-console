@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import type { Insert } from "@/lib/analyse";
+import type { Gabarit } from "@/lib/gabarits";
+import GabaritApercu from "./GabaritApercu";
 
 /**
  * Deux natures de vignettes, et la distinction est honnête à l'écran.
@@ -180,7 +182,10 @@ function Comp({ ins, i }: { ins: Insert; i: number }) {
   }
 }
 
-export default function Vignette({ ins, i, accent }: { ins: Insert; i: number; accent: string }) {
+export default function Vignette({ ins, i, accent, gabarit, vars }: {
+  ins: Insert; i: number; accent: string;
+  gabarit?: Gabarit; vars?: Record<string, string>;
+}) {
   const cv = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     if (ins.moteur === "broll" && cv.current) dessiner(cv.current, ins.n * 7 + i * 13, accent);
@@ -189,7 +194,9 @@ export default function Vignette({ ins, i, accent }: { ins: Insert; i: number; a
   return (
     <div className="vignette">
       {ins.moteur === "motion" ? (
-        <Comp ins={ins} i={i} />
+        gabarit && vars
+          ? <GabaritApercu gabarit={gabarit} params={ins.params || {}} vars={vars} sombre={i === 1} />
+          : <Comp ins={ins} i={i} />
       ) : (
         <>
           <canvas ref={cv} />

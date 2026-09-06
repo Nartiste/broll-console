@@ -17,6 +17,7 @@ import { z } from "zod";
 import { blocsDuScript, type Choix } from "./analyse";
 import { troisPrompts } from "./images";
 import type { DA } from "./da";
+import { SLOTS, type FormeMotion, type Gabarit } from "./gabarits";
 
 export const configure = () => Boolean(process.env.ANTHROPIC_API_KEY);
 
@@ -261,4 +262,88 @@ export async function extraireCharte(
   const c = reponse.parsed_output;
   if (!c) throw new Error("Le modèle n'a pas renvoyé de charte exploitable.");
   return c;
+}
+
+
+/* ---------------------------------------------------------- les gabarits */
+
+const FORMES_MOTION = [
+  "liste-3", "liste-5", "mot-choc", "chiffre", "duo-chiffres",
+  "avant-apres", "opposition", "barres", "pyramide",
+] as const;
+
+const GabaritSchema = z.object({
+  nom: z.string().describe("nom court du composant, ex. « Bouton pilule », « Carte pivotée »"),
+  forme: z.enum(FORMES_MOTION).describe("la forme de contenu que ce composant sait porter"),
+  description: z.string().describe("deux phrases : ce que la référence montre, et comment le gabarit la transpose"),
+  html: z.string().describe("le HTML du composant, à l'intérieur de .g, avec les slots {{…}} de la forme"),
+  css: z.string().describe("le CSS, chaque règle préfixée par .g"),
+});
+
+const CONSIGNE_GABARIT = `Tu transposes un composant graphique — montré sur une capture d'écran — en gabarit HTML/CSS réutilisable.
+
+Le gabarit sera rendu tel quel, en HTML, dans un canevas 16:9, puis rempli avec le contenu d'un script vidéo. Il doit ressembler à la référence : mêmes proportions, même façon d'empiler les éléments, même caractère (arrondis, bordures, ombres, lueurs, rotations, espacements). C'est la STRUCTURE de la référence qui compte — pas ses mots, qui seront remplacés.
+
+Contraintes techniques, toutes obligatoires :
+1. **Tailles en vw uniquement** (1vw = 1 % de la largeur du canevas). Jamais de px, jamais de rem. Le texte doit rester lisible : titres entre 5vw et 12vw, texte courant entre 2.2vw et 3.5vw.
+2. **Couleurs et polices par les variables de charte**, jamais en dur : var(--da-fond), var(--da-encre), var(--da-accent), var(--da-secondaire), var(--da-fond-sombre), var(--da-encre-sombre), var(--da-titre), var(--da-util), var(--da-graisse), var(--da-interlettrage), var(--da-rayon), var(--da-pilule), var(--da-rotation). Si la référence a une couleur qui n'est pas dans la charte, rapproche-la de l'accent.
+3. **Chaque règle CSS commence par .g** (ex. « .g .bouton »). Le HTML est le contenu de .g, sans balise html/body.
+4. **Aucun script, aucune image externe, aucune URL, aucun @import, aucune police web.** Des formes CSS (dégradés, ombres, bordures, pseudo-éléments) reproduisent ce que la référence montre.
+5. **Les slots sont exactement ceux de la forme demandée** — ni plus, ni moins. Syntaxe : {{cle}}, {{a.v}}, et pour les listes {{#items}}…{{.}}…{{/items}} (chaque élément est {{.}}, son numéro {{index}}) ou {{#items}}…{{label}} {{pct}}…{{/items}} pour des objets.
+6. Le composant occupe le canevas de façon composée — centré, avec des marges — et ne déborde jamais.
+7. Tout en français.`;
+
+export async function extraireGabarit(
+  refs: Reference[],
+  opts: { forme?: FormeMotion; consigne?: string; actuel?: Gabarit; charte?: DA } = {},
+): Promise<Omit<Gabarit, "id" | "cree" | "source">> {
+  const client = new Anthropic();
+  const contenu: Anthropic.ContentBlockParam[] = [];
+
+  if (opts.charte) {
+    contenu.push({ type: "text", text: `Charte du projet (pour information) : ${opts.charte.nom} — ${opts.charte.resume || ""}` });
+  }
+  if (opts.actuel) {
+    contenu.push({ type: "text", text: "Gabarit actuel, à faire évoluer :\n" + JSON.stringify(
+      { nom: opts.actuel.nom, forme: opts.actuel.forme, html: opts.actuel.html, css: opts.actuel.css }, null, 2) });
+  }
+  for (const r of refs) {
+    contenu.push({ type: "text", text: `Référence : ${r.nom}` });
+    if (r.type === "image") {
+      contenu.push({ type: "image", source: { type: "base64", media_type: (r.mime || "image/png") as any, data: r.donnees } });
+    } else {
+      contenu.push({ type: "text", text: r.donnees.slice(0, 20_000) });
+    }
+  }
+  const forme = opts.forme;
+  const contrat = forme
+    ? `Forme demandée : ${forme}. Slots à utiliser, exactement : ${SLOTS[forme]}.`
+    : `Choisis la forme que ce composant sait le mieux porter, parmi : ${FORMES_MOTION.join(", ")}. Puis utilise exactement ses slots :\n` +
+      Object.entries(SLOTS).map(([f, s]) => `- ${f} : ${s}`).join("\n");
+  contenu.push({ type: "text", text: contrat });
+  if (opts.consigne?.trim()) {
+    contenu.push({ type: "text", text: `Consigne de l'auteur : « ${opts.consigne.trim()} ». Applique-la ; ne change que ce qu'elle implique.` });
+  } else {
+    contenu.push({ type: "text", text: "Transpose la référence en gabarit." });
+  }
+
+  const reponse = await client.messages.parse({
+    model: "claude-opus-5",
+    max_tokens: 12000,
+    thinking: { type: "adaptive" },
+    output_config: { format: zodOutputFormat(GabaritSchema), effort: "high" },
+    system: CONSIGNE_GABARIT,
+    messages: [{ role: "user", content: contenu }],
+  });
+  const g = reponse.parsed_output;
+  if (!g) throw new Error("Le modèle n'a pas renvoyé de gabarit exploitable.");
+
+  // Ceinture et bretelles : le rendu est isolé dans une iframe sans script,
+  // mais on refuse quand même tout ce qui n'a rien à y faire.
+  const html = g.html.replace(/<\s*(script|iframe|object|embed|link|meta|style)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi, "")
+                     .replace(/<\s*(script|iframe|object|embed|link|meta)[^>]*\/?>/gi, "")
+                     .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+                     .replace(/(src|href)\s*=\s*("[^"]*"|'[^']*')/gi, "");
+  const css = g.css.replace(/@import[^;]*;/gi, "").replace(/url\([^)]*\)/gi, "none").replace(/expression\([^)]*\)/gi, "");
+  return { nom: g.nom, forme: g.forme, description: g.description, html, css };
 }

@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { composer, analyser } from "@/lib/analyse";
-import { derive, variables, type DA } from "@/lib/da";
+import { derive, variables, variablesBrutes, type DA } from "@/lib/da";
+import { EXEMPLES, SLOTS, type FormeMotion, type Gabarit } from "@/lib/gabarits";
+import GabaritApercu from "./GabaritApercu";
 import { majProjet, type Decision, type Etat, type Projet } from "@/lib/store";
 import Vignette from "./Vignette";
 
@@ -34,6 +36,37 @@ export default function Console({ initial }: { initial: Projet }) {
   const [charteErreur, setCharteErreur] = useState<string | null>(null);
   const refsInput = useRef<HTMLInputElement>(null);
   const [consigne, setConsigne] = useState("");
+  const [gabEtat, setGabEtat] = useState<"repos" | "en-cours" | "erreur">("repos");
+  const [gabErreur, setGabErreur] = useState<string | null>(null);
+  const [gabForme, setGabForme] = useState<FormeMotion | "">("");
+  const [gabConsigne, setGabConsigne] = useState<Record<string, string>>({});
+  const gabInput = useRef<HTMLInputElement>(null);
+  const vars = useMemo(() => variablesBrutes(projet.da), [projet.da]);
+  const gabaritPour = (forme: string) => projet.da.gabarits?.find(g => g.forme === forme);
+
+  async function extraireGabarit(fichiers: File[], opts: { consigne?: string; actuel?: Gabarit } = {}) {
+    if (!fichiers.length && !(opts.consigne && opts.actuel)) return;
+    setGabEtat("en-cours"); setGabErreur(null);
+    try {
+      const corps = new FormData();
+      fichiers.forEach(f => corps.append("fichiers", f));
+      if (gabForme && !opts.actuel) corps.append("forme", gabForme);
+      if (opts.consigne) corps.append("consigne", opts.consigne);
+      if (opts.actuel) corps.append("actuel", JSON.stringify(opts.actuel));
+      corps.append("charte", JSON.stringify({ nom: projet.da.nom, resume: projet.da.resume }));
+      const r = await fetch("/api/gabarit", { method: "POST", body: corps });
+      const c = await r.json();
+      if (!r.ok) throw new Error(c.erreur || "Extraction impossible");
+      const g: Gabarit = c.gabarit;
+      const autres = (projet.da.gabarits || []).filter(x => x.id !== g.id);
+      majDa({ gabarits: [...autres, g] });
+      setGabEtat("repos");
+      if (opts.actuel) setGabConsigne(q => ({ ...q, [g.id]: "" }));
+    } catch (e) {
+      setGabEtat("erreur");
+      setGabErreur(e instanceof Error ? e.message : "Extraction impossible");
+    }
+  }
 
   async function lancerAnalyse() {
     setAnalyse("en-cours");
@@ -411,6 +444,72 @@ export default function Console({ initial }: { initial: Projet }) {
               </p>
             )}
           </div>
+        
+          <div className="carte" style={{ gridColumn: "1 / -1" }}>
+            <span className="eyebrow">Gabarits sur mesure</span>
+            <h3 style={{ marginTop: 8 }}>Vos composants, pas les nôtres</h3>
+            <p className="pourquoi" style={{ marginTop: 6, maxWidth: "70ch" }}>
+              Les gabarits intégrés sont des mises en page génériques peintes à votre charte. Ici, vous
+              montrez un composant que vous aimez — un bouton, une carte, un bandeau — et sa structure
+              devient un gabarit. La planche s&apos;en sert à la place du gabarit intégré de même forme.
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, marginTop: 14, alignItems: "end" }}>
+              <div>
+                <label className="eyebrow">Ce que le composant doit porter</label>
+                <select className="champ" style={{ marginTop: 6 }} value={gabForme}
+                        onChange={e => setGabForme(e.target.value as FormeMotion | "")}>
+                  <option value="">Laisser le modèle choisir</option>
+                  {(Object.keys(SLOTS) as FormeMotion[]).map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+              <button className="btn" disabled={gabEtat === "en-cours"} onClick={() => gabInput.current?.click()}>
+                {gabEtat === "en-cours" ? "Extraction…" : "Déposer une capture"}
+              </button>
+              <input ref={gabInput} type="file" hidden accept=".png,.jpg,.jpeg,.webp,.gif"
+                     onChange={e => { const f = e.target.files?.[0]; if (f) extraireGabarit([f]); e.target.value = ""; }} />
+            </div>
+            {gabErreur && <p style={{ color: "var(--alerte)", marginTop: 8, fontSize: 13 }}>{gabErreur}</p>}
+
+            {projet.da.gabarits?.length ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14, marginTop: 18 }}>
+                {projet.da.gabarits.map(g => (
+                  <div key={g.id} style={{ border: "1px solid var(--trait)", borderRadius: 16, overflow: "hidden", background: "var(--surface-2)" }}>
+                    <div className="vignette">
+                      <GabaritApercu gabarit={g} params={EXEMPLES[g.forme]} vars={vars} />
+                    </div>
+                    <div style={{ padding: "10px 12px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <b style={{ fontSize: 14 }}>{g.nom}</b>
+                        <span className="tag motion" style={{ marginLeft: "auto" }}>{g.forme}</span>
+                      </div>
+                      <p className="muet" style={{ fontSize: 12, marginTop: 4, lineHeight: 1.45 }}>{g.description}</p>
+                      {g.source && <p className="mono muet" style={{ fontSize: 10.5, marginTop: 4 }}>d&apos;après {g.source}</p>}
+                      <textarea className="champ" style={{ marginTop: 8, minHeight: 40, fontSize: 13 }}
+                                placeholder="Ajuster : plus de marge, coins moins ronds, texte plus grand…"
+                                value={gabConsigne[g.id] || ""}
+                                onChange={e => setGabConsigne(q => ({ ...q, [g.id]: e.target.value }))} />
+                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                        <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
+                                disabled={gabEtat === "en-cours" || !(gabConsigne[g.id] || "").trim()}
+                                onClick={() => extraireGabarit([], { consigne: gabConsigne[g.id], actuel: g })}>
+                          Réécrire
+                        </button>
+                        <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5, marginLeft: "auto" }}
+                                onClick={() => majDa({ gabarits: (projet.da.gabarits || []).filter(x => x.id !== g.id) })}>
+                          Retirer
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="muet" style={{ marginTop: 14, fontSize: 13 }}>
+                Aucun gabarit sur mesure pour l&apos;instant — la planche utilise les gabarits intégrés.
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -496,7 +595,8 @@ export default function Console({ initial }: { initial: Projet }) {
                         <figure key={i}
                                 className={"variante" + (d.variante === i ? " choisie" : "")}
                                 onClick={() => majDec(ins.n, { variante: i })}>
-                          <Vignette ins={ins} i={i} accent={projet.da.accent} />
+                          <Vignette ins={ins} i={i} accent={projet.da.accent}
+                                    gabarit={gabaritPour(ins.forme)} vars={vars} />
                           <figcaption>
                             <span className="lettre">Variante {"ABC"[i]}</span>
                             {ins.moteur === "motion"

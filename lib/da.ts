@@ -6,6 +6,8 @@
  * `data/<projet>/da.json`, hors du dépôt.
  */
 
+import type { Gabarit } from "./gabarits";
+
 export interface DA {
   nom: string;
   fond: string;
@@ -25,6 +27,7 @@ export interface DA {
   resume?: string;         // ce que la charte est, en trois phrases
   sources?: string[];      // les références dont elle a été extraite
   mesure?: { accent: string; fond: string; sur: string };  // dérive relevée sur un rendu réel
+  gabarits?: Gabarit[];    // les composants sur mesure, extraits de références
 }
 
 /** DA neutre par défaut. Aucune identité de marque dans le dépôt. */
@@ -48,6 +51,19 @@ export const DA_NEUTRE: DA = {
 
 /** Les variables CSS que consomme la planche. Appliquées en ligne sur le
  *  conteneur : deux projets ouverts côte à côte gardent chacun sa charte. */
+/** Les mêmes variables, en dictionnaire simple — pour les injecter dans une
+ *  iframe, où les variables CSS de la page ne pénètrent pas. */
+export function variablesBrutes(da: DA): Record<string, string> {
+  return {
+    "--da-fond": da.fond, "--da-encre": da.encre, "--da-accent": da.accent,
+    "--da-secondaire": da.secondaire, "--da-fond-sombre": da.fondSombre,
+    "--da-encre-sombre": da.encreSombre, "--da-titre": da.policeTitre,
+    "--da-util": da.policeUtil, "--da-graisse": String(da.graisseTitre),
+    "--da-interlettrage": da.interlettrage, "--da-rayon": `${da.rayon}px`,
+    "--da-pilule": `${da.rayonPilule}px`, "--da-rotation": da.rotation,
+  };
+}
+
 export function variables(da: DA): React.CSSProperties {
   return {
     ["--da-fond" as any]: da.fond,
