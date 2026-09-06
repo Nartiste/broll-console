@@ -108,13 +108,25 @@ export default function Console({ initial }: { initial: Projet }) {
     }
   }
 
-  async function lancerAnalyse() {
-    setAnalyse("en-cours");
+  const [depuis, setDepuis] = useState<number | null>(null);
+  const [chrono, setChrono] = useState(0);
+  useEffect(() => {
+    if (depuis === null) return;
+    const t = setInterval(() => setChrono(Math.round((Date.now() - depuis) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [depuis]);
+
+  /* `da` en argument : après une extraction de charte, l'état React n'est pas
+     encore à jour dans cette fermeture — on passe la charte fraîche plutôt
+     que d'analyser avec l'ancien registre. */
+  async function lancerAnalyse(daFraiche?: DA) {
+    const da = daFraiche || projet.da;
+    setAnalyse("en-cours"); setDepuis(Date.now()); setChrono(0);
     try {
       const r = await fetch("/api/analyse", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ script: projet.script, cadrage: projet.cadrage,
-                               registre: projet.da.registre, titre: projet.titre }),
+                               registre: da.registre, titre: projet.titre }),
       });
       const c = await r.json();
       if (!r.ok) throw new Error(c.erreur || "Analyse impossible");
@@ -122,8 +134,8 @@ export default function Console({ initial }: { initial: Projet }) {
                       titre: c.titre || projet.titre };
       setProjet(p => ({ ...p, ...patch }));
       majProjet(projet.id, patch);
-      setAnalyse("repos");
-    } catch { setAnalyse("erreur"); }
+      setAnalyse("repos"); setDepuis(null);
+    } catch { setAnalyse("erreur"); setDepuis(null); }
   }
 
   useEffect(() => { if (!projet.choix) lancerAnalyse(); /* eslint-disable-line */ }, []);
@@ -150,7 +162,7 @@ export default function Console({ initial }: { initial: Projet }) {
       majProjet(projet.id, patch);
       setCharteEtat("repos");
       setConsigne("");
-      lancerAnalyse();
+      lancerAnalyse(da);
     } catch (e) {
       setCharteEtat("erreur");
       setCharteErreur(e instanceof Error ? e.message : "Extraction impossible");
@@ -252,12 +264,12 @@ export default function Console({ initial }: { initial: Projet }) {
         </div>
         <div className="droite" style={{ alignItems: "center" }}>
           <span className="pilule" title={projet.avertissement || ""}>
-            {analyse === "en-cours" ? "analyse en cours…"
+            {analyse === "en-cours" ? `analyse en cours · ${chrono} s`
               : projet.palier === "modele" ? "jugé par le modèle"
               : analyse === "erreur" ? "analyse par modèle indisponible"
               : "analyse déterministe"}
           </span>
-          <button className="btn fantome" disabled={analyse === "en-cours"} onClick={lancerAnalyse}>
+          <button className="btn fantome" disabled={analyse === "en-cours"} onClick={() => lancerAnalyse()}>
             Réanalyser
           </button>
         </div>
@@ -590,8 +602,9 @@ export default function Console({ initial }: { initial: Projet }) {
           <span className="eyebrow">Analyse en cours</span>
           <h3 style={{ marginTop: 8 }}>Le modèle lit votre script</h3>
           <p className="pourquoi" style={{ marginTop: 6 }}>
-            Une vingtaine de secondes. La planche s&apos;ouvrira sur le jugement final — pas sur un plan
-            provisoire que l&apos;analyse remplacerait sous vos clics.
+            {chrono} s écoulées. Comptez une à deux minutes sur un script long : le modèle lit chaque bloc et
+            écrit le contenu de chaque gabarit. La planche s&apos;ouvrira sur le jugement final — pas sur un
+            plan provisoire que l&apos;analyse remplacerait sous vos clics.
           </p>
         </div>
       )}

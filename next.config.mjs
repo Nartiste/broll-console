@@ -2,6 +2,12 @@
 export default {
   reactStrictMode: true,
 
+  /** L'empreinte du build, visible côté client et côté serveur. Un onglet
+   *  ouvert avant un déploiement garde l'ancien code sans le savoir ; en
+   *  comparant les deux, l'application peut le dire au lieu de laisser
+   *  l'utilisateur conclure à une régression. */
+  env: { NEXT_PUBLIC_BUILD: (process.env.VERCEL_GIT_COMMIT_SHA || "dev").slice(0, 7) },
+
   /**
    * Une seule adresse. Chaque déploiement Vercel garde pour toujours sa
    * propre adresse (broll-console-<hash>-prception.vercel.app), son code de
