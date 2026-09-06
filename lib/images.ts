@@ -143,41 +143,55 @@ const openai: Fournisseur = {
 };
 
 /* -------------------------------------------------------- Higgsfield */
-/* Base https://api.higgsfield.ai, en-tête `Authorization: Key <id>:<secret>`
-   (pas un Bearer). Génération ASYNCHRONE : la soumission renvoie un
-   `request_id` et un `status_url` qu'il faut interroger — donc un tour de file
-   d'attente de plus que les trois autres.
-   Le chemin exact de la tâche texte-vers-image dépend du compte : il se règle
-   par HIGGSFIELD_PATH_IMAGE plutôt que d'être deviné ici. */
+/* POST https://api.higgsfield.ai/higgsfield-ai/soul/v2/standard
+   En-tête « Authorization: Key <id>:<secret> » — pas un Bearer.
+   Génération ASYNCHRONE : la soumission renvoie un `status_url` qu'on
+   interroge jusqu'à un état terminal (completed, failed, nsfw, canceled).
+   L'attente est faite ici : une image sort en quelques secondes, et la file
+   d'attente du produit est réservée aux clips, qui prennent des minutes.
+   Renvoie une URL — aucun dépôt de fichiers nécessaire. */
 
 const higgsfield: Fournisseur = {
   id: "higgsfield",
   nom: "Higgsfield",
   rendUneUrl: true,
   configure: () =>
-    Boolean(process.env.HIGGSFIELD_KEY_ID && process.env.HIGGSFIELD_KEY_SECRET
-            && process.env.HIGGSFIELD_PATH_IMAGE),
+    Boolean(process.env.HIGGSFIELD_KEY_ID && process.env.HIGGSFIELD_KEY_SECRET),
   async generer(prompt, opts) {
+    const base = process.env.HIGGSFIELD_BASE_URL || "https://api.higgsfield.ai";
+    const chemin = process.env.HIGGSFIELD_PATH_IMAGE || "/higgsfield-ai/soul/v2/standard";
+    const auth = `Key ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`;
     try {
-      const base = process.env.HIGGSFIELD_BASE_URL || "https://api.higgsfield.ai";
-      const r = await fetch(`${base}${process.env.HIGGSFIELD_PATH_IMAGE}`, {
+      const r = await fetch(`${base}${chemin}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Key ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: auth },
         body: JSON.stringify({
-          task: "text-to-image",
           prompt,
           ...(opts?.reference ? { image_url: opts.reference } : {}),
         }),
       });
       const c = await r.json();
-      if (!r.ok) return { ok: false, erreur: c?.message || `HTTP ${r.status}` };
-      // Réponse asynchrone : on remonte le status_url, la file le suivra.
-      return c.status_url
-        ? { ok: false, erreur: `asynchrone:${c.status_url}` }
-        : { ok: true, images: [{ url: c.url || c.output?.[0]?.url }] };
+      if (!r.ok) return { ok: false, erreur: c?.message || c?.detail || `HTTP ${r.status}` };
+      if (!c.status_url) {
+        const url = c.images?.[0]?.url;
+        return url ? { ok: true, images: [{ url }] }
+                   : { ok: false, erreur: "Réponse Higgsfield inattendue." };
+      }
+      // Attente bornée — au-delà, c'est une panne, pas une lenteur.
+      for (let i = 0; i < 40; i++) {
+        await new Promise(t => setTimeout(t, 2000));
+        const s = await fetch(c.status_url, { headers: { Authorization: auth } });
+        const e = await s.json();
+        if (e.status === "completed") {
+          const images = (e.images || []).map((im: any) => ({ url: im.url }));
+          return images.length ? { ok: true, images }
+                               : { ok: false, erreur: "Terminé sans image." };
+        }
+        if (["failed", "nsfw", "canceled"].includes(e.status)) {
+          return { ok: false, erreur: `Higgsfield : ${e.status}` };
+        }
+      }
+      return { ok: false, erreur: "Higgsfield : délai dépassé (80 s)." };
     } catch (e) { return echec(e); }
   },
 };
