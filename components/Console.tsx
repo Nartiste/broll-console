@@ -86,6 +86,14 @@ export default function Console({ initial }: { initial: Projet }) {
     majProjet(projet.id, { decisions });
   }
 
+  /* La charte extraite est une proposition, pas un verdict : chaque valeur
+     se corrige à la main, et la correction est conservée. */
+  function majDa(patch: Partial<DA>) {
+    const da = { ...projet.da, ...patch };
+    setProjet(p => ({ ...p, da }));
+    majProjet(projet.id, { da });
+  }
+
   function majCadrage(patch: Partial<Projet["cadrage"]>) {
     const cadrage = { ...projet.cadrage, ...patch };
     setProjet(p => ({ ...p, cadrage }));
@@ -279,34 +287,84 @@ export default function Console({ initial }: { initial: Projet }) {
 
           <div className="carte">
             <span className="eyebrow">Charte du projet</span>
-            <h3 style={{ marginTop: 8 }}>{projet.da.nom}</h3>
-            {projet.da.resume && <p className="pourquoi" style={{ marginTop: 6 }}>{projet.da.resume}</p>}
+            <input className="champ" style={{ marginTop: 8, fontFamily: "var(--titre)", fontWeight: 800, fontSize: 19 }}
+                   value={projet.da.nom} onChange={e => majDa({ nom: e.target.value })} />
+            {projet.da.resume && <p className="pourquoi" style={{ marginTop: 8 }}>{projet.da.resume}</p>}
+
             <div className="nuancier">
-              {([["Fond", projet.da.fond, projet.da.encre],
-                 ["Encre", projet.da.encre, projet.da.fond],
-                 ["Accent", projet.da.accent, projet.da.fondSombre],
-                 ["Secondaire", projet.da.secondaire, projet.da.fond]] as const).map(([l, c, t]) => (
-                <div className="teinte" key={l} style={{ background: c, color: t }}>
-                  <span>{l}</span><b>{c.toUpperCase()}</b>
-                </div>
+              {([["Fond", "fond", projet.da.encre],
+                 ["Encre", "encre", projet.da.fond],
+                 ["Accent", "accent", projet.da.fondSombre],
+                 ["Secondaire", "secondaire", projet.da.fond],
+                 ["Fond sombre", "fondSombre", projet.da.encreSombre],
+                 ["Encre sombre", "encreSombre", projet.da.fondSombre]] as const).map(([l, k, t]) => (
+                <label className="teinte" key={k} style={{ background: projet.da[k], color: t, cursor: "pointer", position: "relative" }}>
+                  <span>{l}</span>
+                  <input type="text" value={projet.da[k]} spellCheck={false}
+                         onChange={e => { const v = e.target.value; if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) majDa({ [k]: v } as any); }}
+                         style={{ background: "transparent", border: "none", color: "inherit", font: "inherit",
+                                  fontFamily: "var(--mono)", fontSize: 11.5, fontWeight: 700, width: "100%", padding: 0 }} />
+                  <input type="color" value={/^#[0-9A-Fa-f]{6}$/.test(projet.da[k]) ? projet.da[k] : "#000000"}
+                         onChange={e => majDa({ [k]: e.target.value.toUpperCase() } as any)}
+                         style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", width: "100%", height: "100%" }}
+                         aria-label={`Choisir la couleur ${l}`} />
+                </label>
               ))}
             </div>
+
             <div style={{ marginTop: 14, fontFamily: projet.da.policeTitre, fontWeight: projet.da.graisseTitre,
                           letterSpacing: projet.da.interlettrage, fontSize: 26, lineHeight: 1 }}>
-              Titre · {projet.da.policeTitre.split(",")[0].replace(/['"]/g, "")}
+              Aperçu du titre
             </div>
-            <div className="muet" style={{ marginTop: 6, fontSize: 12, fontFamily: projet.da.policeUtil }}>
-              Utilitaire · {projet.da.policeUtil.split(",")[0].replace(/['"]/g, "")} · rayon {projet.da.rayon}px · pilule {projet.da.rayonPilule}px · rotation {projet.da.rotation}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 14 }}>
+              <div>
+                <label className="eyebrow">Police des titres</label>
+                <input className="champ" style={{ marginTop: 6 }} value={projet.da.policeTitre}
+                       onChange={e => majDa({ policeTitre: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow">Police utilitaire</label>
+                <input className="champ" style={{ marginTop: 6 }} value={projet.da.policeUtil}
+                       onChange={e => majDa({ policeUtil: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow">Graisse des titres</label>
+                <select className="champ" style={{ marginTop: 6 }} value={projet.da.graisseTitre}
+                        onChange={e => majDa({ graisseTitre: +e.target.value })}>
+                  {[400, 500, 600, 700, 800, 900].map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="eyebrow">Interlettrage</label>
+                <input className="champ" style={{ marginTop: 6 }} value={projet.da.interlettrage}
+                       onChange={e => majDa({ interlettrage: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow">Rayon des cartes (px)</label>
+                <input className="champ" type="number" min={0} max={48} style={{ marginTop: 6 }} value={projet.da.rayon}
+                       onChange={e => majDa({ rayon: +e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow">Rayon des badges (px)</label>
+                <input className="champ" type="number" min={0} max={100} style={{ marginTop: 6 }} value={projet.da.rayonPilule}
+                       onChange={e => majDa({ rayonPilule: +e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow">Rotation des superpositions</label>
+                <input className="champ" style={{ marginTop: 6 }} value={projet.da.rotation}
+                       onChange={e => majDa({ rotation: e.target.value })} />
+              </div>
             </div>
+            <p className="pourquoi">
+              Tout se corrige à la main et la correction est conservée. Les couleurs et les polices
+              n&apos;affectent que les gabarits motion ; seul le registre change les prompts de B-roll.
+            </p>
 
             <label className="eyebrow" style={{ display: "block", marginTop: 18 }}>Registre visuel des B-roll</label>
             <textarea className="champ" style={{ marginTop: 8, minHeight: 70, resize: "vertical" }}
                       value={projet.da.registre}
-                      onChange={e => {
-                        const da = { ...projet.da, registre: e.target.value };
-                        setProjet(p => ({ ...p, da }));
-                        majProjet(projet.id, { da });
-                      }} />
+                      onChange={e => majDa({ registre: e.target.value })} />
             <p className="pourquoi">
               Cette phrase est placée devant chaque génération d&apos;image. Si vous la changez à la main,
               cliquez « Réanalyser » pour que les prompts la reprennent.
