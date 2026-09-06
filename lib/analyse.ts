@@ -268,10 +268,37 @@ function prompts(b: Bloc, registre: string): string[] {
   ];
 }
 
-export function analyser(
+/** Ce qu'un étage de notation produit pour un bloc : le mérite et le rendu.
+ *  Le palier déterministe et le palier modèle remplissent la même structure —
+ *  seule la qualité du jugement change, jamais la suite du pipeline. */
+export interface Choix {
+  bloc: number;                 // index dans blocsDuScript()
+  moteur: Moteur;
+  forme: Forme;
+  score: number;
+  imageabilite: number;
+  abstraction: number;
+  pourquoi: string;
+  params?: Record<string, any>;
+  variantes?: string[];
+}
+
+/** Les blocs de souffle du script, numérotés — l'unité que les deux paliers notent. */
+export function blocsDuScript(script: string) {
+  return decouper(script).blocs.map((b, i) => ({
+    i, texte: b.texte, lignes: b.lignes, section: b.section,
+    directives: b.directives, mots: b.mots,
+  }));
+}
+
+/**
+ * Étage 2 — la sélection sous contrainte, commune aux deux paliers.
+ * La note dit le mérite, la sélection dit le rythme.
+ */
+export function composer(
   script: string,
-  cadrage: Cadrage = CADRAGE_DEFAUT,
-  registre = "3D stylisée, lignes lumineuses sur fond sombre",
+  cadrage: Cadrage,
+  choix: Choix[],
   titre = "Sans titre",
 ): Plan {
   const { blocs, totalMots, pauses } = decouper(script);
@@ -281,14 +308,12 @@ export function analyser(
 
   const dureeTotale = timecode(totalMots);
 
-  // Étage 1 — noter tous les passages.
-  const candidats = blocs
-    .filter(b => b.mots >= 3)
-    .map(b => {
-      const m = note(b);
-      const a = aiguiller(b, m);
+  const candidats = choix
+    .filter(c => blocs[c.bloc])
+    .map(c => {
+      const b = blocs[c.bloc];
       return {
-        bloc: b, ...m, ...a,
+        ...c, src: b,
         entree: timecode(b.debutMot),
         duree: Math.min((b.mots / cadrage.debit) * 60, cadrage.dureeMax),
       };
@@ -327,18 +352,18 @@ export function analyser(
 
   const inserts: Insert[] = retenus.map((c, i) => ({
     n: i + 1,
-    section: c.bloc.section,
+    section: c.src.section,
     moteur: c.moteur,
     forme: c.forme,
-    texte: c.bloc.lignes,
-    mots: c.bloc.mots,
+    texte: c.src.lignes,
+    mots: c.src.mots,
     entree: Math.round(c.entree * 10) / 10,
     duree: Math.round(c.duree * 10) / 10,
     score: c.score,
     imageabilite: c.imageabilite,
     abstraction: c.abstraction,
     pourquoi: c.pourquoi,
-    variantes: c.moteur === "broll" ? prompts(c.bloc, registre) : undefined,
+    variantes: c.variantes,
     params: c.params,
   }));
 
@@ -354,4 +379,42 @@ export function analyser(
     script: { mots: totalMots, duree: Math.round(dureeTotale * 10) / 10, debit: cadrage.debit },
     cadrage, inserts, ecartes: candidats.length - inserts.length, alertes,
   };
+}
+
+/**
+ * Palier 1 — l'analyse déterministe.
+ *
+ * Elle ne comprend rien : elle lit les directives du prompteur, les capitales,
+ * les chiffres et les énumérations. C'est suffisant pour les formes
+ * grammaticales, et insuffisant pour juger ce qui mérite une image — d'où le
+ * palier modèle, qui remplit exactement la même structure `Choix`.
+ */
+export function analyser(
+  script: string,
+  cadrage: Cadrage = CADRAGE_DEFAUT,
+  registre = "3D stylisée, lignes lumineuses sur fond sombre",
+  titre = "Sans titre",
+): Plan {
+  const { blocs } = decouper(script);
+
+  const choix: Choix[] = blocs
+    .map((b, i) => ({ b, i }))
+    .filter(({ b }) => b.mots >= 3)
+    .map(({ b, i }) => {
+      const m = note(b);
+      const a = aiguiller(b, m);
+      return {
+        bloc: i,
+        moteur: a.moteur,
+        forme: a.forme,
+        score: m.score,
+        imageabilite: m.imageabilite,
+        abstraction: m.abstraction,
+        pourquoi: a.pourquoi,
+        params: a.params,
+        variantes: a.moteur === "broll" ? prompts(b, registre) : undefined,
+      };
+    });
+
+  return composer(script, cadrage, choix, titre);
 }
