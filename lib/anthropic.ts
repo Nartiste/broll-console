@@ -201,10 +201,27 @@ export interface Reference {
   mime?: string;
 }
 
-export async function extraireCharte(refs: Reference[]): Promise<DA & { resume: string; sources: string[] }> {
+/**
+ * Deux usages :
+ *   - des références seules → on déduit une charte ;
+ *   - une charte de départ + une consigne (« plus sombre », « moins de grille »,
+ *     « du rose en plus du vert ») → on la réécrit. C'est le geste du sur-mesure :
+ *     on parle à la charte, on ne remplit pas des cases.
+ */
+export async function extraireCharte(
+  refs: Reference[],
+  opts: { consigne?: string; actuelle?: DA } = {},
+): Promise<DA & { resume: string; sources: string[] }> {
   const client = new Anthropic();
 
   const contenu: Anthropic.ContentBlockParam[] = [];
+  if (opts.actuelle) {
+    contenu.push({
+      type: "text",
+      text: "Charte actuelle du projet (à faire évoluer, pas à repartir de zéro) :\n" +
+            JSON.stringify(opts.actuelle, null, 2),
+    });
+  }
   for (const r of refs) {
     contenu.push({ type: "text", text: `Référence : ${r.nom}` });
     if (r.type === "image") {
@@ -221,7 +238,16 @@ export async function extraireCharte(refs: Reference[]): Promise<DA & { resume: 
       contenu.push({ type: "text", text: r.donnees.slice(0, 40_000) });
     }
   }
-  contenu.push({ type: "text", text: "Déduis la charte." });
+  if (opts.consigne?.trim()) {
+    contenu.push({
+      type: "text",
+      text: `Consigne de l'auteur : « ${opts.consigne.trim()} »\n` +
+            "Applique-la à la charte actuelle. Ne change que ce que la consigne implique, " +
+            "garde tout le reste à l'identique, et note dans `sources` ce que la consigne a modifié.",
+    });
+  } else {
+    contenu.push({ type: "text", text: "Déduis la charte." });
+  }
 
   const reponse = await client.messages.parse({
     model: "claude-opus-5",

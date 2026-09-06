@@ -14,7 +14,12 @@ export async function POST(req: Request) {
   }
   const form = await req.formData().catch(() => null);
   const fichiers = (form?.getAll("fichiers") || []).filter((f): f is File => f instanceof File);
-  if (!fichiers.length) return NextResponse.json({ erreur: "Aucune référence reçue." }, { status: 400 });
+  const consigne = String(form?.get("consigne") || "").trim();
+  let actuelle: any = undefined;
+  try { const a = form?.get("actuelle"); if (typeof a === "string" && a) actuelle = JSON.parse(a); } catch { /* ignorée */ }
+  if (!fichiers.length && !consigne) {
+    return NextResponse.json({ erreur: "Aucune référence ni consigne reçue." }, { status: 400 });
+  }
 
   const refs: Reference[] = [];
   for (const f of fichiers.slice(0, 12)) {
@@ -35,10 +40,12 @@ export async function POST(req: Request) {
       refs.push({ nom, type: "texte", donnees: buf.toString("utf-8") });
     }
   }
-  if (!refs.length) return NextResponse.json({ erreur: "Aucune référence exploitable (images, PDF, Word ou texte)." }, { status: 422 });
+  if (!refs.length && !consigne) {
+    return NextResponse.json({ erreur: "Aucune référence exploitable (images, PDF, Word ou texte)." }, { status: 422 });
+  }
 
   try {
-    const charte = await extraireCharte(refs);
+    const charte = await extraireCharte(refs, { consigne, actuelle });
     return NextResponse.json({ charte, references: refs.map(r => r.nom) });
   } catch (e) {
     return NextResponse.json({ erreur: `Extraction impossible : ${e instanceof Error ? e.message : "erreur"}` }, { status: 502 });

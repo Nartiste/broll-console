@@ -33,6 +33,7 @@ export default function Console({ initial }: { initial: Projet }) {
   const [charteEtat, setCharteEtat] = useState<"repos" | "en-cours" | "erreur">("repos");
   const [charteErreur, setCharteErreur] = useState<string | null>(null);
   const refsInput = useRef<HTMLInputElement>(null);
+  const [consigne, setConsigne] = useState("");
 
   async function lancerAnalyse() {
     setAnalyse("en-cours");
@@ -54,13 +55,17 @@ export default function Console({ initial }: { initial: Projet }) {
 
   useEffect(() => { if (!projet.choix) lancerAnalyse(); /* eslint-disable-line */ }, []);
 
-  async function extraireCharte(fichiers: FileList | File[]) {
+  async function extraireCharte(fichiers: FileList | File[], consigneTexte = "") {
     const liste = Array.from(fichiers);
-    if (!liste.length) return;
+    if (!liste.length && !consigneTexte.trim()) return;
     setCharteEtat("en-cours"); setCharteErreur(null);
     try {
       const corps = new FormData();
       liste.forEach(f => corps.append("fichiers", f));
+      if (consigneTexte.trim()) corps.append("consigne", consigneTexte.trim());
+      // On part toujours de la charte en place : une consigne la fait évoluer,
+      // des références neuves la complètent, jamais de retour à zéro silencieux.
+      corps.append("actuelle", JSON.stringify(projet.da));
       const r = await fetch("/api/charte", { method: "POST", body: corps });
       const c = await r.json();
       if (!r.ok) throw new Error(c.erreur || "Extraction impossible");
@@ -71,6 +76,7 @@ export default function Console({ initial }: { initial: Projet }) {
       setProjet(p => ({ ...p, ...patch }));
       majProjet(projet.id, patch);
       setCharteEtat("repos");
+      setConsigne("");
       lancerAnalyse();
     } catch (e) {
       setCharteEtat("erreur");
@@ -275,6 +281,19 @@ export default function Console({ initial }: { initial: Projet }) {
                      accept=".png,.jpg,.jpeg,.webp,.gif,.pdf,.docx,.txt,.md"
                      onChange={e => { if (e.target.files) extraireCharte(e.target.files); }} />
             </div>
+            <div className="eyebrow" style={{ marginTop: 18 }}>Ajuster avec une consigne</div>
+            <textarea className="champ" style={{ marginTop: 8, minHeight: 64, resize: "vertical" }}
+                      placeholder="Plus sombre. Moins de grille au sol. Du rose néon en plus du vert. Des titres moins écrasés…"
+                      value={consigne} onChange={e => setConsigne(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) extraireCharte([], consigne); }} />
+            <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8 }}>
+              <button className="btn" disabled={charteEtat === "en-cours" || !consigne.trim()}
+                      onClick={() => extraireCharte([], consigne)}>
+                {charteEtat === "en-cours" ? "Réécriture…" : "Réécrire la charte"}
+              </button>
+              <span className="muet" style={{ fontSize: 12 }}>⌘↵ · ne change que ce que la consigne implique</span>
+            </div>
+
             {projet.da.sources?.length ? (
               <>
                 <div className="eyebrow" style={{ marginTop: 16 }}>Ce que chaque référence a apporté</div>
