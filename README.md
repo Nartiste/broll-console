@@ -91,6 +91,25 @@ Aucune identité de marque n'est codée en dur : le chrome de l'application est 
 la planche se rend dans la charte du projet, par variables CSS posées en ligne. Les contenus
 clients (scripts, chartes) ne sont pas versionnés.
 
+## Comptes et synchronisation
+
+Sans compte, tout vit dans le navigateur. Avec un compte (lien magique par e-mail, Supabase
+Auth), chaque écriture part aussi vers le serveur, et les projets se retrouvent depuis n'importe
+quel appareil. Le plus récent gagne.
+
+Mise en place, une fois, dans le projet Supabase :
+
+1. **SQL Editor** → exécuter `supabase/migrations/20260907_projets.sql` (table `projets`, RLS :
+   chacun ne voit que les siens).
+2. **Authentication → URL Configuration** : *Site URL* = l'adresse du site ; *Redirect URLs* +=
+   `<adresse>/studio`.
+3. **Authentication → SMTP** : l'expéditeur par défaut de Supabase est limité à quelques envois
+   par heure — suffisant pour tester seul, pas pour un panel. Brancher un expéditeur (Resend,
+   Postmark…) avant d'inviter des testeurs.
+4. Variables Vercel : `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+
+À la première connexion, le flanc propose de verser les projets locaux sur le compte.
+
 ## Ce qui n'est pas encore là
 
 - L'extraction de la charte depuis un moodboard d'images
@@ -98,7 +117,6 @@ clients (scripts, chartes) ne sont pas versionnés.
 - L'appel aux modèles de génération et la file d'attente
 - Le rendu des gabarits en vidéo
 - La passe de mise en charte colorimétrique
-- L'authentification et la persistance serveur
 - L'insertion automatique dans la timeline Premiere (reportée)
 
 ## Décisions de conception

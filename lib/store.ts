@@ -11,6 +11,7 @@
 
 import { analyser, composer, CADRAGE_DEFAUT, type Cadrage, type Choix, type Plan } from "./analyse";
 import { DA_NEUTRE, type DA } from "./da";
+import { pousser, supprimerDistant } from "./sync";
 
 export type Etat = "oui" | "presque" | "non" | null;
 
@@ -61,6 +62,10 @@ export interface Projet {
   avertissement?: string | null;
   /** La dernière production lancée : tâches, états, fichiers. Survit au rechargement. */
   production?: Production;
+  /** Dernière modification (ms). Le plus récent gagne à la synchronisation. */
+  maj?: number;
+  /** Le compte auquel le projet appartient — absent tant qu'il n'est que local. */
+  compte?: string;
 }
 
 const CLE = "broll-console:projets";
@@ -95,8 +100,10 @@ export function creer(script: string, nomFichier = "Nouveau projet"): Projet {
     cadrage: { ...CADRAGE_DEFAUT },
     da: { ...DA_NEUTRE },
     decisions: {},
+    maj: Date.now(),
   };
   ecrire([p, ...lire()]);
+  pousser(p);
   return p;
 }
 
@@ -104,13 +111,15 @@ export function majProjet(id: string, patch: Partial<Projet>) {
   const tous = lire();
   const i = tous.findIndex(p => p.id === id);
   if (i < 0) return null;
-  tous[i] = { ...tous[i], ...patch };
+  tous[i] = { ...tous[i], ...patch, maj: Date.now() };
   ecrire(tous);
+  pousser(tous[i]);
   return tous[i];
 }
 
 export function supprimer(id: string) {
   ecrire(lire().filter(p => p.id !== id));
+  supprimerDistant(id);
 }
 
 /** Le plan se recompose localement à partir des choix : les curseurs du

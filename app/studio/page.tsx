@@ -4,11 +4,16 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import Depot from "@/components/Depot";
 import { planDe, projets, supprimer, type Projet } from "@/lib/store";
+import { tirer } from "@/lib/sync";
 
 export default function Projets() {
   const [liste, setListe] = useState<Projet[] | null>(null);
 
-  useEffect(() => { setListe(projets()); }, []);
+  useEffect(() => {
+    setListe(projets());
+    // Avec un compte, le serveur est la référence : on fond ce qu'il a dans le local.
+    tirer().then(r => { if (r) setListe(projets()); });
+  }, []);
 
   if (liste === null) return null;
 
