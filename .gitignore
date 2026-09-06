@@ -1,0 +1,18 @@
+# Contenu client — jamais dans un dépôt public
+data/
+brainstorms/
+console/
+
+# Secrets
+.env
+.env.local
+.env*.local
+
+# Build
+node_modules/
+.next/
+next-env.d.ts
+__pycache__/
+*.pyc
+.DS_Store
+*.tsbuildinfo
