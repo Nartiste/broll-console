@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   if (!configure()) return repli("ANTHROPIC_API_KEY absente : analyse déterministe, libellés approximatifs.");
 
   try {
-    const { choix, titre: titreModele } = await analyserAvecClaude(script, r, t);
+    const { choix, titre: titreModele } = await analyserAvecClaude(script, r, t, c.partBroll);
     return NextResponse.json({ palier: "modele", titre: titreModele, choix,
                                plan: composer(script, c, choix, titreModele) });
   } catch (e) {

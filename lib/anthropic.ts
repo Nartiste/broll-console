@@ -80,7 +80,7 @@ Gabarits et champs à remplir :
 
 Règles de fond :
 1. **Les libellés sont réécrits, jamais découpés.** Tu peux reformuler pour tenir en trois mots ; tu ne dois pas couper une phrase en plein milieu.
-2. **Sois sélectif.** Note bas les passages de transition. Il vaut mieux proposer moins et mieux : la sélection finale se fait ensuite sous contrainte de rythme, et elle prend les meilleurs scores.
+2. **Sois sélectif sur le mérite, pas sur le moteur.** Note bas les passages de transition. Mais la vidéo est en plan fixe : le B-roll est la seule variation visuelle, et une part visée de B-roll t'est donnée. Approche-toi de cette part — en cherchant, dans les passages abstraits, la scène concrète qui les incarne (un personnage, un geste, un lieu) plutôt qu'en les envoyant tous en gabarit. C'est une cible, pas un quota : si le script ne s'y prête vraiment pas, dis-le dans « pourquoi ».
 3. **Ne rends aucun timecode ni aucune durée** — ils sont calculés ailleurs.
 4. Tout en français.`;
 
@@ -115,6 +115,7 @@ export async function analyserAvecClaude(
   script: string,
   registre: string,
   titreDefaut: string,
+  partBroll = 40,
 ): Promise<{ choix: Choix[]; titre: string }> {
   const client = new Anthropic();
   const blocs = blocsDuScript(script);
@@ -131,7 +132,8 @@ export async function analyserAvecClaude(
     system: CONSIGNE,
     messages: [{
       role: "user",
-      content: `Registre visuel du projet, pour les sujets de B-roll : ${registre}\n\nLe script, par blocs :\n\n${corpus}`,
+      content: `Registre visuel du projet, pour les sujets de B-roll : ${registre}\n` +
+               `Part de B-roll visée : environ ${partBroll} % des inserts retenus.\n\nLe script, par blocs :\n\n${corpus}`,
     }],
   });
 

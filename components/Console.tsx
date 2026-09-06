@@ -50,6 +50,7 @@ export default function Console({ initial }: { initial: Projet }) {
   const [genErreur, setGenErreur] = useState<string | null>(null);
 
   async function genererVignettes(n: number) {
+    if (analyse === "en-cours") return;   // le plan va changer sous nos pieds
     const ins = plan.inserts.find(i => i.n === n);
     if (!ins || ins.moteur !== "broll" || !ins.variantes?.length) return;
     setGeneration(g => ({ ...g, [n]: "en-cours" })); setGenErreur(null);
@@ -304,6 +305,19 @@ export default function Console({ initial }: { initial: Projet }) {
             </p>
           </div>
 
+          <div className="carte reglage">
+            <span className="eyebrow">Part de B-roll visée</span>
+            <div className="val">{projet.cadrage.partBroll ?? 40}<small>% des inserts</small></div>
+            <input type="range" min={0} max={100} step={5} value={projet.cadrage.partBroll ?? 40}
+                   onChange={e => majCadrage({ partBroll: +e.target.value })} />
+            <div className="bornes"><span>tout en motion</span><span>tout en B-roll</span></div>
+            <p>
+              Une cible transmise au jugement, pas un quota. En plan fixe, le B-roll porte toute la variation
+              visuelle. Ce réglage change le jugement, pas seulement le rythme : cliquez « Réanalyser » pour l&apos;appliquer.
+              Actuellement : {plan.inserts.filter(i => i.moteur === "broll").length} B-roll sur {plan.inserts.length}.
+            </p>
+          </div>
+
           <div className="carte reglage" style={{ gridColumn: "1 / -1" }}>
             <span className="eyebrow">Débit de parole</span>
             <div className="val">{projet.cadrage.debit}<small>mots par minute</small></div>
@@ -547,7 +561,17 @@ export default function Console({ initial }: { initial: Projet }) {
         </div>
       )}
 
-      {porte === 3 && (
+      {porte === 3 && !projet.choix && analyse === "en-cours" && (
+        <div className="carte" style={{ marginTop: 8 }}>
+          <span className="eyebrow">Analyse en cours</span>
+          <h3 style={{ marginTop: 8 }}>Le modèle lit votre script</h3>
+          <p className="pourquoi" style={{ marginTop: 6 }}>
+            Une vingtaine de secondes. La planche s&apos;ouvrira sur le jugement final — pas sur un plan
+            provisoire que l&apos;analyse remplacerait sous vos clics.
+          </p>
+        </div>
+      )}
+      {porte === 3 && !(!projet.choix && analyse === "en-cours") && (
         <>
           <div className="ruban-zone">
             <div className="ruban">

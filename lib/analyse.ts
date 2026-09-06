@@ -23,10 +23,14 @@ export interface Cadrage {
   ecartMin: number;     // jamais deux inserts plus rapprochés
   ecartMax: number;     // jamais plus de face caméra pure que ça
   debit: number;        // mots par minute — à calibrer sur une vidéo passée
+  /** Part de B-roll visée, en % des inserts. Sur un plan fixe, le B-roll
+   *  porte toute la variation visuelle : sans cible, un jugement sélectif
+   *  bascule tout en motion design. Une cible, pas un quota. */
+  partBroll: number;
 }
 
 export const CADRAGE_DEFAUT: Cadrage = {
-  plafond: 30, dureeMax: 12, ecartMin: 6, ecartMax: 30, debit: 135,
+  plafond: 30, dureeMax: 12, ecartMin: 6, ecartMax: 30, debit: 135, partBroll: 40,
 };
 
 export interface Insert {
