@@ -44,6 +44,40 @@ export default function Console({ initial }: { initial: Projet }) {
   const vars = useMemo(() => variablesBrutes(projet.da), [projet.da]);
   const gabaritPour = (forme: string) => projet.da.gabarits?.find(g => g.forme === forme);
 
+  /* Les vignettes ne se génèrent jamais toutes seules : c'est une dépense,
+     petite mais réelle, donc un geste explicite — par insert, ou pour tous. */
+  const [generation, setGeneration] = useState<Record<number, "en-cours" | "erreur">>({});
+  const [genErreur, setGenErreur] = useState<string | null>(null);
+
+  async function genererVignettes(n: number) {
+    const ins = plan.inserts.find(i => i.n === n);
+    if (!ins || ins.moteur !== "broll" || !ins.variantes?.length) return;
+    setGeneration(g => ({ ...g, [n]: "en-cours" })); setGenErreur(null);
+    try {
+      const r = await fetch("/api/vignettes", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompts: ins.variantes }),
+      });
+      const c = await r.json();
+      if (!r.ok) throw new Error(c.erreur || "Génération impossible");
+      const images = (c.vignettes as any[]).map(v => (v.ok ? v.images?.[0]?.affichage || null : null));
+      const rate = (c.vignettes as any[]).find(v => !v.ok);
+      if (rate && images.every(x => !x)) throw new Error(rate.erreur || "Génération refusée");
+      majDec(n, { images });
+      setGeneration(g => { const { [n]: _, ...reste } = g; return reste; });
+    } catch (e) {
+      setGeneration(g => ({ ...g, [n]: "erreur" }));
+      setGenErreur(e instanceof Error ? e.message : "Génération impossible");
+    }
+  }
+
+  async function genererToutes() {
+    const cibles = plan.inserts.filter(i => i.moteur === "broll" && dec(i.n).etat !== "non" && !dec(i.n).images);
+    if (!cibles.length) return;
+    if (!confirm(`Générer ${cibles.length * 3} images (${cibles.length} inserts × 3 variantes) ? Ordre de grandeur : ${(cibles.length * 3 * 0.03).toFixed(2)} $ hors quota gratuit.`)) return;
+    for (const i of cibles) await genererVignettes(i.n);
+  }
+
   async function extraireGabarit(fichiers: File[], opts: { consigne?: string; actuel?: Gabarit } = {}) {
     if (!fichiers.length && !(opts.consigne && opts.actuel)) return;
     setGabEtat("en-cours"); setGabErreur(null);
@@ -554,6 +588,21 @@ export default function Console({ initial }: { initial: Projet }) {
                 <kbd>←</kbd> <kbd>→</kbd> naviguer · <kbd>1</kbd> garder · <kbd>2</kbd> presque · <kbd>3</kbd> écarter
               </span>
             </div>
+            {(() => {
+              const restantes = plan.inserts.filter(i => i.moteur === "broll" && dec(i.n).etat !== "non" && !dec(i.n).images).length;
+              const enCours = Object.values(generation).includes("en-cours");
+              return restantes > 0 ? (
+                <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
+                  <button className="btn" disabled={enCours} onClick={genererToutes}>
+                    {enCours ? "Génération en cours…" : `Générer les vignettes B-roll · ${restantes} insert${restantes > 1 ? "s" : ""} × 3`}
+                  </button>
+                  <span className="muet" style={{ fontSize: 12 }}>
+                    Les aperçus factices deviennent de vraies images. C'est l'étage bon marché — mais c'est une dépense, donc un clic.
+                  </span>
+                  {genErreur && <span style={{ color: "var(--alerte)", fontSize: 12 }}>{genErreur}</span>}
+                </div>
+              ) : null;
+            })()}
           </div>
 
           <div className="planche">
@@ -596,7 +645,8 @@ export default function Console({ initial }: { initial: Projet }) {
                                 className={"variante" + (d.variante === i ? " choisie" : "")}
                                 onClick={() => majDec(ins.n, { variante: i })}>
                           <Vignette ins={ins} i={i} accent={projet.da.accent}
-                                    gabarit={gabaritPour(ins.forme)} vars={vars} />
+                                    gabarit={gabaritPour(ins.forme)} vars={vars}
+                                    image={d.images?.[i] ?? null} />
                           <figcaption>
                             <span className="lettre">Variante {"ABC"[i]}</span>
                             {ins.moteur === "motion"
@@ -607,6 +657,18 @@ export default function Console({ initial }: { initial: Projet }) {
                       ))}
                     </div>
 
+                    {ins.moteur === "broll" && (
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
+                        <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
+                                disabled={generation[ins.n] === "en-cours"}
+                                onClick={e => { e.stopPropagation(); genererVignettes(ins.n); }}>
+                          {generation[ins.n] === "en-cours" ? "Génération…"
+                            : d.images ? "Régénérer les 3 vignettes" : "Générer les 3 vignettes"}
+                        </button>
+                        {generation[ins.n] === "erreur" && <span style={{ color: "var(--alerte)", fontSize: 12 }}>échec — voir le message en haut</span>}
+                        {!d.images && <span className="muet" style={{ fontSize: 12 }}>aperçus factices tant que rien n&apos;est généré</span>}
+                      </div>
+                    )}
                     <div className="decision">
                       {([["oui", "Garder", "1"], ["presque", "Presque", "2"], ["non", "Écarter", "3"]] as const)
                         .map(([k, l, t]) => (

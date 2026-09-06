@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Compte from "@/components/Compte";
+import Origine from "@/components/Origine";
 
 export default function CoqueStudio({ children }: { children: React.ReactNode }) {
   return (
@@ -17,7 +18,7 @@ export default function CoqueStudio({ children }: { children: React.ReactNode })
           <Compte />
         </div>
       </aside>
-      <main className="panneau">{children}</main>
+      <main className="panneau"><Origine />{children}</main>
     </div>
   );
 }

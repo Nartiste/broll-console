@@ -130,6 +130,7 @@ export default function Depot({ compact = false }: { compact?: boolean }) {
   const [survol, setSurvol] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [lecture, setLecture] = useState(false);
+  const [doute, setDoute] = useState<{ texte: string; nom: string; message: string } | null>(null);
 
   /** Un script s'écrit dans un traitement de texte et s'exporte en PDF — c'est
    *  la forme naturelle. Le texte brut est le cas particulier, pas l'inverse. */
@@ -142,6 +143,13 @@ export default function Depot({ compact = false }: { compact?: boolean }) {
       const r = await fetch("/api/extraire", { method: "POST", body: corps });
       const c = await r.json();
       if (!r.ok) { setErreur(c.erreur || "Lecture impossible."); return; }
+      // Un fichier sans aucune marque de prompteur est rarement un script —
+      // souvent une charte ou un document déposé au mauvais endroit. On demande.
+      if (c.prompteur === false) {
+        setDoute({ texte: c.texte, nom: fichier.name,
+                   message: "Aucune directive entre crochets, aucune ligne courte : ce fichier ressemble à un document, pas à un script. Une charte se dépose dans le projet, Porte 2 — pas ici." });
+        return;
+      }
       const p = creer(c.texte, fichier.name);
       router.push(`/studio/${p.id}`);
     } catch {
@@ -175,6 +183,18 @@ export default function Depot({ compact = false }: { compact?: boolean }) {
         mots accentués en capitales, les directives entre crochets. L'analyse démarre au dépôt.
       </p>
       {erreur && <p style={{ color: "var(--alerte)", marginTop: 10 }}>{erreur}</p>}
+      {doute && (
+        <div className="carte" style={{ marginTop: 14, textAlign: "left" }}>
+          <b>{doute.nom}</b>
+          <p style={{ marginTop: 6, fontSize: 13.5 }}>{doute.message}</p>
+          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+            <button className="btn fantome" onClick={() => setDoute(null)}>Annuler</button>
+            <button className="btn" onClick={() => { const p = creer(doute.texte, doute.nom); router.push(`/studio/${p.id}`); }}>
+              C&apos;est bien mon script, continuer
+            </button>
+          </div>
+        </div>
+      )}
       <div className="ou">
         <button className="btn" disabled={lecture} onClick={() => input.current?.click()}>
           {lecture ? "Lecture…" : "Choisir un fichier"}

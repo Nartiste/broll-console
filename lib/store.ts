@@ -19,6 +19,9 @@ export interface Decision {
   variante: number;
   raisons: string[];
   note: string;
+  /** Les vignettes réellement générées, une par variante. Absentes tant que
+   *  rien n'a été lancé : la planche montre alors un aperçu factice, marqué. */
+  images?: (string | null)[];
 }
 
 export interface Projet {

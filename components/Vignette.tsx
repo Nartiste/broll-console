@@ -182,14 +182,15 @@ function Comp({ ins, i }: { ins: Insert; i: number }) {
   }
 }
 
-export default function Vignette({ ins, i, accent, gabarit, vars }: {
+export default function Vignette({ ins, i, accent, gabarit, vars, image }: {
   ins: Insert; i: number; accent: string;
   gabarit?: Gabarit; vars?: Record<string, string>;
+  image?: string | null;
 }) {
   const cv = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    if (ins.moteur === "broll" && cv.current) dessiner(cv.current, ins.n * 7 + i * 13, accent);
-  }, [ins, i, accent]);
+    if (ins.moteur === "broll" && !image && cv.current) dessiner(cv.current, ins.n * 7 + i * 13, accent);
+  }, [ins, i, accent, image]);
 
   return (
     <div className="vignette">
@@ -197,6 +198,8 @@ export default function Vignette({ ins, i, accent, gabarit, vars }: {
         gabarit && vars
           ? <GabaritApercu gabarit={gabarit} params={ins.params || {}} vars={vars} sombre={i === 1} />
           : <Comp ins={ins} i={i} />
+      ) : image ? (
+        <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
       ) : (
         <>
           <canvas ref={cv} />
