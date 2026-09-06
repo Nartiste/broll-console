@@ -350,6 +350,11 @@ export default function Console({ initial }: { initial: Projet }) {
               Une cible transmise au jugement, pas un quota. En plan fixe, le B-roll porte toute la variation
               visuelle. Ce réglage change le jugement, pas seulement le rythme : cliquez « Réanalyser » pour l&apos;appliquer.
               Actuellement : {plan.inserts.filter(i => i.moteur === "broll").length} B-roll sur {plan.inserts.length}.
+              {(projet.cadrage.partBroll ?? 40) < 25 && (
+                <span style={{ color: "var(--signal)", display: "block", marginTop: 6 }}>
+                  Sous 25 %, attendez-vous à peu ou pas d&apos;images — et sans image, pas de clip.
+                </span>
+              )}
             </p>
           </div>
 
@@ -680,6 +685,26 @@ export default function Console({ initial }: { initial: Projet }) {
           </div>
 
           <div id="production" />
+          {plan.inserts.length > 0 && plan.inserts.every(i => i.moteur === "motion") && (
+            <div className="carte" style={{ marginTop: 8, marginBottom: 14, borderColor: "var(--signal)" }}>
+              <span className="eyebrow" style={{ color: "var(--signal)" }}>Aucun insert B-roll dans ce plan</span>
+              <p style={{ marginTop: 8, fontSize: 14, maxWidth: "70ch" }}>
+                Tous les inserts sont en motion design. Il n&apos;y a donc <b>aucune image à générer</b>, et
+                sans image, <b>aucun clip</b> : l&apos;image-to-video ne concerne que les inserts B-roll.
+                {(projet.cadrage.partBroll ?? 40) < 25
+                  ? ` La cause est dans le cadrage : part de B-roll visée à ${projet.cadrage.partBroll} %.`
+                  : " Le script a été jugé entièrement conceptuel — montez la part de B-roll visée pour forcer le modèle à chercher des scènes concrètes."}
+              </p>
+              <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
+                <button className="btn" disabled={analyse === "en-cours"}
+                        onClick={() => { const cadrage = { ...projet.cadrage, partBroll: 40, plafond: Math.max(projet.cadrage.plafond, 30), dureeMax: Math.max(projet.cadrage.dureeMax, 8) };
+                                         setProjet(p => ({ ...p, cadrage })); majProjet(projet.id, { cadrage }); lancerAnalyse(); }}>
+                  Viser 40 % de B-roll et réanalyser
+                </button>
+                <span className="muet" style={{ fontSize: 12.5 }}>Vos décisions actuelles seront remplacées par le nouveau plan.</span>
+              </div>
+            </div>
+          )}
           {(prodOuverte || projet.production) && (
             <Production projet={projet} plan={plan} dec={dec} vars={vars} gabaritPour={gabaritPour}
                         onMaj={prodn => { setProjet(p => ({ ...p, production: prodn })); majProjet(projet.id, { production: prodn }); }}
