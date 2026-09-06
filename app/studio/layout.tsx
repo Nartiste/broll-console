@@ -7,13 +7,14 @@ export default function CoqueStudio({ children }: { children: React.ReactNode })
     <div className="coque">
       <aside className="flanc">
         <Link href="/" className="marque" style={{ textDecoration: "none" }}>
-          Console <i>B-roll</i>
+          <b>B</b>Console <i>B-roll</i>
         </Link>
         <nav>
-          <Link href="/studio">Projets</Link>
-          <Link href="/studio#chartes">Chartes</Link>
-          <Link href="/studio#gabarits">Gabarits</Link>
+          <Link href="/studio" className="actif">Projets</Link>
         </nav>
+        <p className="muet" style={{ fontSize: 12, lineHeight: 1.5, margin: 0 }}>
+          Chartes et gabarits vivent dans chaque projet, Porte 2. Une bibliothèque commune viendra avec les comptes.
+        </p>
         <div className="bas">
           <Compte />
         </div>

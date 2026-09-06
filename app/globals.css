@@ -2,59 +2,32 @@
    Neutre par construction : aucune identité de marque ici. La charte du client
    ne s'applique qu'à la planche, par variables --da-* posées en ligne. */
 
+/* Un seul monde visuel, le même que la page de vente : noir profond, un
+   seul vert, capitales. Le studio est un outil de travail — les surfaces
+   montent d'un cran vers le gris-vert pour porter des cartes et des champs
+   sans éblouir, mais le fond, l'accent et la typographie sont ceux de la
+   landing. Une seule peau, assumée, sans thème clair. */
 :root {
-  color-scheme: dark light;
-  --fond: #131518;
-  --surface: #191C20;
-  --surface-2: #21252A;
-  --surface-3: #2A2F35;
-  --encre: #EAEBED;
-  --encre-2: #969DA5;
-  --encre-3: #666D75;
-  --trait: #262B31;
-  --trait-fort: #39414A;
-  --accent: #19A88F;
-  --accent-encre: #04120F;
-  --signal: #E0A33E;
-  --alerte: #E0574B;
-  --r: 14px;
+  color-scheme: dark;
+  --fond: #070807;
+  --surface: #0E100C;
+  --surface-2: #151813;
+  --surface-3: #1E221C;
+  --encre: #F4F5EE;
+  --encre-2: #8B9086;
+  --encre-3: #5E635A;
+  --trait: #1F2219;
+  --trait-fort: #2F3430;
+  --accent: #BFFF00;
+  --accent-encre: #0A0B05;
+  --signal: #FFB300;
+  --alerte: #FF4D5A;
+  --r: 12px;
   --r-l: 20px;
   --titre: "Bricolage Grotesque", "Public Sans", system-ui, sans-serif;
   --corps: "Public Sans", system-ui, -apple-system, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  --ombre: 0 1px 2px rgba(0, 0, 0, .3), 0 20px 48px -32px rgba(0, 0, 0, .9);
-}
-
-:root[data-theme="light"] {
-  --fond: #F4F4F2;
-  --surface: #FFFFFF;
-  --surface-2: #ECEDEA;
-  --surface-3: #E0E2DE;
-  --encre: #16181B;
-  --encre-2: #5C6268;
-  --encre-3: #8B9199;
-  --trait: #DFE1DD;
-  --trait-fort: #B9BDB8;
-  --accent: #128974;
-  --accent-encre: #FFFFFF;
-  --ombre: 0 1px 2px rgba(20, 22, 25, .05), 0 20px 48px -34px rgba(20, 22, 25, .45);
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    --fond: #F4F4F2;
-    --surface: #FFFFFF;
-    --surface-2: #ECEDEA;
-    --surface-3: #E0E2DE;
-    --encre: #16181B;
-    --encre-2: #5C6268;
-    --encre-3: #8B9199;
-    --trait: #DFE1DD;
-    --trait-fort: #B9BDB8;
-    --accent: #128974;
-    --accent-encre: #FFFFFF;
-    --ombre: 0 1px 2px rgba(20, 22, 25, .05), 0 20px 48px -34px rgba(20, 22, 25, .45);
-  }
+  --ombre: 0 1px 2px rgba(0, 0, 0, .4), 0 20px 48px -32px rgba(0, 0, 0, .95);
 }
 
 * { box-sizing: border-box; }
@@ -87,14 +60,14 @@ button { border: none; background: none; cursor: pointer; }
 /* ---------- primitives ---------- */
 .btn {
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 11px 20px; border-radius: var(--r);
+  padding: 11px 20px; border-radius: 100px;
   background: var(--accent); color: var(--accent-encre);
   font-weight: 600; font-size: 14px; transition: filter .14s, transform .14s;
 }
 .btn:hover { filter: brightness(1.08); }
 .btn:active { transform: translateY(1px); }
 .btn[disabled] { opacity: .38; cursor: not-allowed; filter: none; }
-.btn.fantome { background: transparent; color: var(--encre); border: 1px solid var(--trait-fort); }
+.btn.fantome { background: var(--surface-2); color: var(--encre); border: 1px solid var(--trait-fort); }
 .btn.fantome:hover { background: var(--surface-2); filter: none; }
 .btn.large { padding: 15px 28px; font-size: 15.5px; }
 
@@ -146,7 +119,8 @@ button { border: none; background: none; cursor: pointer; }
   padding: 20px 16px; display: flex; flex-direction: column; gap: 22px;
 }
 @media (max-width: 900px) { .flanc { border-right: none; border-bottom: 1px solid var(--trait); } }
-.flanc .marque { font-family: var(--titre); font-weight: 800; font-size: 16px; letter-spacing: -.03em; }
+.flanc .marque { display: flex; align-items: center; gap: 10px; font-family: var(--titre); font-weight: 800; font-size: 16px; letter-spacing: -.02em; }
+.flanc .marque b { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: var(--accent); color: var(--accent-encre); font-size: 13px; }
 .flanc .marque i { color: var(--accent); font-style: normal; }
 .flanc nav { display: grid; gap: 2px; }
 .flanc nav a {
@@ -155,6 +129,7 @@ button { border: none; background: none; cursor: pointer; }
 }
 .flanc nav a:hover { background: var(--surface-2); color: var(--encre); }
 .flanc nav a[aria-current="page"] { background: var(--surface-2); color: var(--encre); font-weight: 600; }
+.flanc nav a.actif { background: var(--surface-2); color: var(--encre); font-weight: 600; }
 .flanc .bas { margin-top: auto; border-top: 1px solid var(--trait); padding-top: 16px; font-size: 13px; }
 .flanc .compte { display: flex; align-items: center; gap: 10px; }
 .flanc .ava {
@@ -165,7 +140,7 @@ button { border: none; background: none; cursor: pointer; }
 
 .panneau { padding: 26px 30px 96px; min-width: 0; }
 .panneau > header { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
-.panneau > header h1 { font-size: 26px; font-weight: 800; }
+.panneau > header h1 { font-size: 28px; font-weight: 800; text-transform: uppercase; letter-spacing: -.03em; line-height: 1; }
 .panneau > header .droite { margin-left: auto; display: flex; gap: 10px; }
 
 .projets { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
