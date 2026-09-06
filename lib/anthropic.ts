@@ -111,11 +111,20 @@ function versParams(r: z.infer<typeof Retenu>): Record<string, unknown> | undefi
   }
 }
 
+export type Effort = "low" | "medium" | "high";
+
+/**
+ * L'effort pèse directement sur la durée : sur un script de 1 600 mots,
+ * « high » se compte en minutes. « medium » est la valeur par défaut — la
+ * qualité tient, l'attente devient supportable. Réglable par l'appelant
+ * (et par ANALYSE_EFFORT côté serveur) pour mesurer plutôt que supposer.
+ */
 export async function analyserAvecClaude(
   script: string,
   registre: string,
   titreDefaut: string,
   partBroll = 40,
+  effort: Effort = (process.env.ANALYSE_EFFORT as Effort) || "medium",
 ): Promise<{ choix: Choix[]; titre: string }> {
   const client = new Anthropic();
   const blocs = blocsDuScript(script);
@@ -128,7 +137,7 @@ export async function analyserAvecClaude(
     model: "claude-opus-5",
     max_tokens: 16000,
     thinking: { type: "adaptive" },
-    output_config: { format: zodOutputFormat(Sortie), effort: "high" },
+    output_config: { format: zodOutputFormat(Sortie), effort },
     system: CONSIGNE,
     messages: [{
       role: "user",

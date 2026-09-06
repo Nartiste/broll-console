@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { composer, analyser } from "@/lib/analyse";
+import { composer, analyser, CADRAGE_DEFAUT } from "@/lib/analyse";
 import { derive, variables, variablesBrutes, type DA } from "@/lib/da";
 import { EXEMPLES, LIBELLES, SLOTS, type FormeMotion, type Gabarit } from "@/lib/gabarits";
 import { Comp } from "./Vignette";
@@ -290,6 +290,15 @@ export default function Console({ initial }: { initial: Projet }) {
 
       {porte === 1 && (
         <div className="reglages">
+          <div style={{ gridColumn: "1 / -1", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <button className="btn fantome" style={{ padding: "8px 14px", fontSize: 13 }}
+                    onClick={() => majCadrage({ ...CADRAGE_DEFAUT })}>
+              Revenir aux réglages par défaut
+            </button>
+            <span className="muet" style={{ fontSize: 12.5 }}>
+              30 inserts · 12 s maximum · 40 % de B-roll · 135 mots/min. Les curseurs se règlent ensuite un par un.
+            </span>
+          </div>
           <div className="carte reglage">
             <span className="eyebrow">Nombre maximum d&apos;inserts</span>
             <div className="val">{projet.cadrage.plafond}<small>inserts</small></div>
