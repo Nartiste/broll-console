@@ -118,29 +118,7 @@ button { border: none; background: none; cursor: pointer; }
   border: 1px solid var(--trait); color: var(--encre-2);
 }
 
-/* ---------- funnel ---------- */
-.funnel { max-width: 1080px; margin: 0 auto; padding: 0 24px 96px; }
-
-.nav {
-  display: flex; align-items: center; gap: 16px;
-  padding: 22px 0; position: sticky; top: 0; z-index: 30;
-  background: color-mix(in srgb, var(--fond) 88%, transparent);
-  backdrop-filter: blur(12px);
-}
-.nav .marque { font-family: var(--titre); font-weight: 800; font-size: 17px; letter-spacing: -.03em; }
-.nav .marque i { color: var(--accent); font-style: normal; }
-.nav .droite { margin-left: auto; display: flex; gap: 10px; align-items: center; }
-
-.hero { padding: 72px 0 56px; }
-.hero h1 {
-  font-weight: 800; font-size: clamp(38px, 6.4vw, 76px); line-height: 1.02;
-  letter-spacing: -.038em; max-width: 15ch;
-}
-.hero h1 em { font-style: normal; color: var(--accent); }
-.hero .accroche { margin-top: 24px; font-size: 19px; color: var(--encre-2); max-width: 58ch; }
-.hero .actions { margin-top: 34px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-
-/* Le dépôt du script : c'est le geste d'entrée du produit, il tient la page. */
+/* Le dépôt du script : le geste d'entrée du produit — partagé avec le studio. */
 .depot {
   margin-top: 44px; border: 1.5px dashed var(--trait-fort); border-radius: 26px;
   padding: 46px 28px; text-align: center; background: var(--surface);
@@ -150,54 +128,6 @@ button { border: none; background: none; cursor: pointer; }
 .depot h3 { font-size: 21px; font-weight: 700; }
 .depot p { margin-top: 8px; color: var(--encre-2); font-size: 14.5px; }
 .depot .ou { margin-top: 18px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-
-.flux { display: grid; gap: 2px; margin-top: 72px; grid-template-columns: repeat(5, 1fr); }
-@media (max-width: 880px) { .flux { grid-template-columns: 1fr 1fr; } }
-.flux .pas {
-  background: var(--surface); border: 1px solid var(--trait); padding: 20px 18px;
-  display: flex; flex-direction: column; gap: 8px;
-}
-.flux .pas:first-child { border-radius: var(--r-l) 0 0 var(--r-l); }
-.flux .pas:last-child { border-radius: 0 var(--r-l) var(--r-l) 0; }
-@media (max-width: 880px) { .flux .pas { border-radius: var(--r) !important; } }
-.flux .pas b { font-family: var(--titre); font-size: 15px; font-weight: 700; }
-.flux .pas span { font-size: 13px; color: var(--encre-2); line-height: 1.45; }
-.flux .pas.cle { background: var(--surface-2); border-color: var(--trait-fort); }
-.flux .pas.cle b { color: var(--accent); }
-
-.section { margin-top: 88px; }
-.section > h2 { font-size: clamp(26px, 3.6vw, 38px); font-weight: 800; letter-spacing: -.03em; max-width: 20ch; }
-.section > .chapeau { margin-top: 14px; color: var(--encre-2); max-width: 62ch; font-size: 16.5px; }
-
-.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 30px; }
-@media (max-width: 820px) { .duo { grid-template-columns: 1fr; } }
-.duo .carte h3 { font-size: 19px; font-weight: 700; margin-bottom: 6px; }
-.duo .carte .eyebrow { margin-bottom: 12px; display: block; }
-.duo dl { margin: 16px 0 0; display: grid; gap: 9px; }
-.duo dl div { display: flex; gap: 12px; font-size: 13.5px; padding-bottom: 9px; border-bottom: 1px solid var(--trait); }
-.duo dl div:last-child { border: none; padding-bottom: 0; }
-.duo dt { color: var(--encre-2); width: 130px; flex: none; }
-.duo dd { margin: 0; font-weight: 600; }
-
-.jalons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 30px; }
-@media (max-width: 820px) { .jalons { grid-template-columns: 1fr; } }
-.jalons .carte .n {
-  font-family: var(--mono); font-size: 12px; color: var(--accent);
-  display: block; margin-bottom: 10px;
-}
-.jalons .carte h3 { font-size: 17.5px; font-weight: 700; margin-bottom: 7px; }
-.jalons .carte p { font-size: 14px; color: var(--encre-2); }
-
-.final { margin-top: 96px; text-align: center; padding: 56px 28px; }
-.final h2 { font-size: clamp(28px, 4vw, 44px); font-weight: 800; margin: 0 auto; max-width: 18ch; }
-.final p { margin: 16px auto 0; color: var(--encre-2); max-width: 52ch; }
-.final .actions { margin-top: 30px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-
-footer.pied {
-  margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--trait);
-  display: flex; gap: 16px; flex-wrap: wrap; color: var(--encre-3); font-size: 13px;
-}
-footer.pied a { margin-left: auto; }
 
 /* ---------- connexion ---------- */
 .connexion { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }

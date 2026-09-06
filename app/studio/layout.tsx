@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Compte from "@/components/Compte";
 
 export default function CoqueStudio({ children }: { children: React.ReactNode }) {
   return (
@@ -13,13 +14,7 @@ export default function CoqueStudio({ children }: { children: React.ReactNode })
           <Link href="/studio#gabarits">Gabarits</Link>
         </nav>
         <div className="bas">
-          <div className="compte">
-            <span className="ava">?</span>
-            <div>
-              <div style={{ fontWeight: 600 }}>Mode local</div>
-              <Link href="/login" className="muet" style={{ fontSize: 12 }}>Se connecter</Link>
-            </div>
-          </div>
+          <Compte />
         </div>
       </aside>
       <main className="panneau">{children}</main>

@@ -1,145 +1,202 @@
 import Link from "next/link";
-import Depot from "@/components/Depot";
-
-const FLUX = [
-  { b: "Le script", s: "Vous déposez le fichier. Rien d'autre à préparer." },
-  { b: "L'analyse", s: "Chaque passage est noté, puis alloué sous contrainte de rythme." },
-  { b: "La planche", s: "Trois propositions par insert. Vous tranchez.", cle: true },
-  { b: "La production", s: "Seuls les inserts validés partent en génération." },
-  { b: "Le dossier", s: "Numéroté en ordre de script. Plus qu'à poser." },
-];
+import Galaxie from "@/components/Galaxie";
+import "./landing.css";
 
 export default function Accueil() {
   return (
-    <div className="funnel">
-      <header className="nav">
-        <span className="marque">Console <i>B-roll</i></span>
-        <div className="droite">
-          <Link className="btn fantome" href="/login">Se connecter</Link>
+    <div className="landing">
+      <header className="l-nav">
+        <div className="l-in">
+          <Link href="/" className="l-marque"><b>B</b>Console B-roll</Link>
+          <nav>
+            <a href="#resultats">Résultats</a>
+            <a href="#comment">Comment ça marche</a>
+            <a href="#moteurs">Deux moteurs</a>
+            <a href="#mesure">Sur mesure</a>
+            <a href="https://github.com/Nartiste/broll-console">Code source</a>
+          </nav>
+          <div className="l-droite">
+            <Link href="/login" className="l-btn ghost">Se connecter</Link>
+            <span className="l-tag">
+              <Link href="/studio" className="l-btn">Commencer</Link>
+              <small>Accès anticipé</small>
+            </span>
+          </div>
         </div>
       </header>
 
-      <section className="hero">
-        <span className="eyebrow">Pour les vidéos face caméra écrites d&apos;avance</span>
-        <h1>Votre script sait déjà <em>où mettre les images</em></h1>
-        <p className="accroche">
-          Déposez le script. Recevez la liste des B-roll et des motion design à poser sur votre
-          timeline, dans votre direction artistique — et validez chaque plan sur une planche de
-          vignettes <strong>avant</strong> qu&apos;un seul euro de génération soit dépensé.
-        </p>
-        <Depot />
-      </section>
+      <section className="l-hero">
+        <Galaxie />
+        <div className="l-in">
+          <span className="l-chip"><i />Console B-roll · pour les vidéos face caméra</span>
+          <h1 className="l-h1">
+            Votre script <span className="glyphe">▶</span> sait déjà<br />
+            où vont <em>les images</em>
+          </h1>
+          <p className="l-sous">
+            Déposez le script. Validez la planche. Récupérez les B-roll et le motion design,
+            dans votre charte — sans payer une seule génération que vous n&apos;avez pas approuvée.
+          </p>
 
-      <div className="flux">
-        {FLUX.map(p => (
-          <div key={p.b} className={"pas" + (p.cle ? " cle" : "")}>
-            <b>{p.b}</b>
-            <span>{p.s}</span>
+          <div className="l-parcours">
+            <div>
+              <span className="l-num">1</span>
+              <b>Déposez votre script</b>
+              <span>PDF, Word ou texte. Au format prompteur, l&apos;analyse lit vos propres marques.</span>
+              <Link href="/studio" className="l-btn">Commencer</Link>
+            </div>
+            <div>
+              <span className="l-num">2</span>
+              <b>Validez la planche</b>
+              <span>Trois propositions par insert. Vous gardez, vous ajustez, vous écartez — au clavier.</span>
+              <Link href="/studio" className="l-btn blanc">Voir un exemple</Link>
+            </div>
+            <div>
+              <span className="l-num">3</span>
+              <b>Récupérez le dossier</b>
+              <span>Numéroté en ordre de script. Plus qu&apos;à poser sur la timeline.</span>
+              <a href="#comment" className="l-btn ghost">Comment ça marche</a>
+            </div>
           </div>
-        ))}
-      </div>
-
-      <section className="section">
-        <h2>La porte de validation se place avant la dépense, pas après</h2>
-        <p className="chapeau">
-          La plupart des outils génèrent tout, puis vous laissent trier. Vous avez alors payé
-          chaque plan, y compris ceux que vous jetez — et votre validation ne valide plus rien,
-          elle trie des déchets. Ici, on vous montre des vignettes en images fixes : une image
-          coûte une fraction d&apos;une vidéo, et l&apos;image que vous approuvez sert
-          d&apos;entrée à la génération. Le clip final ressemble à ce que vous avez vu.
-        </p>
+        </div>
       </section>
 
-      <section className="section">
-        <h2>Deux moteurs, parce qu&apos;un B-roll et un motion design n&apos;ont rien en commun</h2>
-        <p className="chapeau">
-          C&apos;est la distinction que les outils génériques ratent — et c&apos;est elle qui
-          décide de la qualité du résultat. L&apos;aiguillage ne se fait pas à la main : il se
-          déduit du passage. Ce qui est concret et se filme part en génération. Ce qui est
-          abstrait — une liste, un pourcentage, un framework — part en gabarit.
-        </p>
-        <div className="duo">
-          <div className="carte">
-            <span className="eyebrow">Moteur 1</span>
+      <section className="l-section l-in" id="resultats">
+        <div className="l-tete">
+          <div>
+            <span className="l-eyebrow">Ce qui sort de la console</span>
+            <h2>Des images, pas des promesses</h2>
+          </div>
+          <Link href="/studio" className="l-btn ghost">Essayer sur un script d&apos;exemple</Link>
+        </div>
+        <div className="l-galerie">
+          <figure className="l-carte">
+            <span className="l-etiq">B-roll généré</span>
+            <img src="/apercu/broll.jpg" alt="B-roll généré dans le registre 3D wireframe vert : un homme affalé sur un canapé devant un écran" />
+            <figcaption>Généré dans le registre extrait de vos références. Validé sur vignette avant la moindre dépense.</figcaption>
+          </figure>
+          <figure className="l-carte">
+            <span className="l-etiq">Motion · votre charte</span>
+            <img src="/apercu/motion.png" alt="Gabarit motion sur mesure : barre d'étapes 01 02 03 dans une charte noir et vert fluo" />
+            <figcaption>Un gabarit extrait d&apos;un composant que vous aimez, rempli avec le contenu de votre script.</figcaption>
+          </figure>
+          <figure className="l-carte">
+            <span className="l-etiq">La planche</span>
+            <div className="l-planche">
+              <div className="l-rep">« 2 000 abonnés et ZÉRO client payant »</div>
+              <div className="l-var"><div className="on" /><div /><div /></div>
+              <div className="l-dec"><span className="on">Garder</span><span>Presque</span><span>Écarter</span></div>
+            </div>
+            <figcaption>Trois variantes, trois états, une raison en un clic. Un ruban montre le rythme pendant que vous triez.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section className="l-section l-in" id="comment">
+        <div className="l-tete">
+          <div>
+            <span className="l-eyebrow">Comment ça marche</span>
+            <h2>Trois portes avant la moindre dépense</h2>
+          </div>
+        </div>
+        <div className="l-etapes">
+          <div>
+            <span className="l-code">01</span>
+            <h3>Cadrage</h3>
+            <p>Nombre maximum d&apos;inserts, durée maximum de chacun, débit de parole. Trois curseurs qui bornent la facture avant la première génération.</p>
+          </div>
+          <div>
+            <span className="l-code">02</span>
+            <h3>Direction artistique</h3>
+            <p>Vous ne décrivez pas votre charte : vous la montrez. Moodboard, document, captures — elle en est déduite, puis corrigée à la main ou sur consigne.</p>
+          </div>
+          <div>
+            <span className="l-code">03</span>
+            <h3>La planche</h3>
+            <p>Trois vignettes par insert. Garder, presque, écarter — et une raison en un clic, qui remonte pour diagnostiquer la charte plutôt que les images une par une.</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="l-section l-in" id="moteurs">
+        <div className="l-tete">
+          <div>
+            <span className="l-eyebrow">Pourquoi ça marche</span>
+            <h2>Un B-roll et un motion design n&apos;ont rien en commun</h2>
+            <p className="l-chapeau">
+              Les outils génériques confondent les deux. Ici, l&apos;aiguillage se déduit du passage : ce qui se
+              filme part en génération, ce qui ne se filme pas — une liste, un pourcentage, un framework —
+              part en gabarit. L&apos;abstrait ne se filme pas, il se dessine.
+            </p>
+          </div>
+        </div>
+        <div className="l-moteurs">
+          <div className="l-moteur">
+            <span className="l-eyebrow">Moteur 1</span>
             <h3>B-roll</h3>
-            <p className="muet">Génération probabiliste. Le monde visuel vient de votre moodboard.</p>
+            <p className="l-desc">Génération d&apos;images puis de clips, dans le registre de vos références.</p>
             <dl>
+              <div><dt>Nature</dt><dd>probabiliste</dd></div>
               <div><dt>Coût</dt><dd>par clip, à chaque essai</dd></div>
-              <div><dt>Résultat</dt><dd>imprévisible</dd></div>
-              <div><dt>Validation</dt><dd>indispensable</dd></div>
+              <div><dt>Validation</dt><dd className="oui">indispensable — sur vignette</dd></div>
               <div><dt>Texte à l&apos;écran</dt><dd>impossible</dd></div>
             </dl>
           </div>
-          <div className="carte">
-            <span className="eyebrow">Moteur 2</span>
+          <div className="l-moteur">
+            <span className="l-eyebrow">Moteur 2</span>
             <h3>Motion design</h3>
-            <p className="muet">Gabarit paramétré, rendu dans votre charte. Déterministe.</p>
+            <p className="l-desc">Gabarits rendus dans votre charte. Déterministes : ce que vous voyez est le résultat.</p>
             <dl>
-              <div><dt>Coût</dt><dd>une fois, à la fabrication</dd></div>
-              <div><dt>Résultat</dt><dd>prévisible</dd></div>
+              <div><dt>Nature</dt><dd>gabarit paramétré</dd></div>
+              <div><dt>Coût</dt><dd className="oui">une fois, à la fabrication</dd></div>
               <div><dt>Validation</dt><dd>inutile</dd></div>
-              <div><dt>Texte à l&apos;écran</dt><dd>natif et lisible</dd></div>
+              <div><dt>Texte à l&apos;écran</dt><dd className="oui">natif et lisible</dd></div>
             </dl>
           </div>
         </div>
       </section>
 
-      <section className="section">
-        <h2>Trois portes, dans cet ordre</h2>
-        <div className="jalons">
-          <div className="carte">
-            <span className="n mono">Porte 1</span>
-            <h3>Cadrage</h3>
-            <p>
-              Deux curseurs — nombre maximum d&apos;inserts, durée maximum de chacun. Ils bornent
-              le coût de la vidéo avant la première génération.
+      <section className="l-section l-in" id="mesure">
+        <div className="l-mesure">
+          <div>
+            <span className="l-eyebrow">Sur mesure</span>
+            <h2 style={{ marginTop: 14 }}>Vous montrez un bouton. Vous obtenez ce bouton.</h2>
+            <p className="l-chapeau">
+              Les gabarits ne sont pas neuf dessins imposés. Ce sont neuf rôles de contenu — une liste, un
+              chiffre, une opposition — que vos composants habillent.
             </p>
+            <ul>
+              <li>Déposez la capture d&apos;un composant que vous aimez : sa structure devient un gabarit.</li>
+              <li>Chaque insert de cette forme le porte ensuite, avec son propre contenu, dans votre charte.</li>
+              <li>Trop de marge, pilule trop grosse ? Écrivez-le. Le gabarit se réécrit sans repartir de zéro.</li>
+            </ul>
           </div>
-          <div className="carte">
-            <span className="n mono">Porte 2</span>
-            <h3>Direction artistique</h3>
-            <p>
-              La charte du projet, plus le contrôle de dérive colorimétrique des rendus. Si la
-              direction est fausse, les trente vignettes le sont aussi.
-            </p>
-          </div>
-          <div className="carte">
-            <span className="n mono">Porte 3</span>
-            <h3>La planche</h3>
-            <p>
-              Trois variantes par insert, trois états, une raison en un clic quand vous écartez.
-              Un ruban montre le rythme et les trous, pendant que vous triez.
-            </p>
+          <img src="/apercu/motion.png" alt="Barre d'étapes extraite d'une référence After Effects, remplie avec la règle des 3C" />
+        </div>
+      </section>
+
+      <section className="l-acces">
+        <div className="l-in">
+          <span className="l-chip"><i />Accès anticipé</span>
+          <h2 style={{ marginTop: 22 }}>Le script est déjà écrit. Le reste devrait suivre.</h2>
+          <p>
+            Essayez sur un script d&apos;exemple, ou déposez le vôtre. Rien n&apos;est généré, rien n&apos;est
+            facturé tant que vous n&apos;avez pas validé la planche.
+          </p>
+          <div className="l-actions">
+            <Link href="/studio" className="l-btn grand">Ouvrir la console</Link>
+            <Link href="/login" className="l-btn ghost grand">Recevoir un lien de connexion</Link>
           </div>
         </div>
       </section>
 
-      <section className="section">
-        <h2>Une raison qui revient dix fois ne parle pas des vignettes</h2>
-        <p className="chapeau">
-          Elle parle de la direction artistique. C&apos;est pour ça que rejeter un plan coûte un
-          clic et que la raison coûte un mot : ces étiquettes remontent, s&apos;agrègent, et
-          diagnostiquent la charte extraite plutôt que les images une par une. Un outil qui ne
-          récolte que des oui et des non refait la même erreur à chaque vidéo.
-        </p>
-      </section>
-
-      <section className="final carte">
-        <h2>Le script est déjà écrit. Le reste devrait suivre.</h2>
-        <p>
-          Essayez sur un script d&apos;exemple, ou déposez le vôtre. Rien n&apos;est généré,
-          rien n&apos;est facturé tant que vous n&apos;avez pas validé la planche.
-        </p>
-        <div className="actions">
-          <Link className="btn large" href="/studio">Ouvrir la console</Link>
-          <Link className="btn fantome large" href="/login">Créer un compte</Link>
-        </div>
-      </section>
-
-      <footer className="pied">
+      <footer className="l-in">
         <span>Console B-roll</span>
-        <span className="mono">v0.1</span>
-        <a href="https://github.com/Nartiste/broll-console">Code source</a>
+        <span className="mono">v0.2</span>
+        <div className="l-fin">
+          <a href="https://github.com/Nartiste/broll-console">Code source</a>
+          <Link href="/login">Se connecter</Link>
+        </div>
       </footer>
     </div>
   );
