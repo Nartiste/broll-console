@@ -10,12 +10,12 @@ export default {
 
   /** Le rendu des gabarits passe par un Chromium headless : binaire natif,
    *  à laisser hors du bundle. */
-  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
+  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core", "ffmpeg-static"],
 
   /** Sur Vercel, le traçage des dépendances ne voit pas les binaires brotli
    *  de Chromium (chargés à l'exécution, pas importés) : sans cette ligne la
    *  fonction part sans navigateur. */
-  outputFileTracingIncludes: { "/api/rendu": ["./node_modules/@sparticuz/chromium/bin/**"] },
+  outputFileTracingIncludes: { "/api/rendu": ["./node_modules/@sparticuz/chromium/bin/**", "./node_modules/ffmpeg-static/ffmpeg"] },
 
   /**
    * Une seule adresse. Chaque déploiement Vercel garde pour toujours sa

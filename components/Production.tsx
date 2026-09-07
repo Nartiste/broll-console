@@ -131,15 +131,15 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
           const r = await fetch(`/api/production/fichier?url=${encodeURIComponent(a.video)}&nom=${a.fichier}.mp4`);
           if (r.ok) { z.file(`${a.fichier}.mp4`, await r.blob()); lignes.push(`${a.fichier}.mp4  ·  B-roll  ·  ${a.duree}s`); }
         } else if (a.html) {
-          // Un HTML ne se pose pas sur une timeline : on le fait rendre en séquence PNG
-          // à canal alpha, 24 i/s, et on la range dans le dossier de l'insert.
+          // Un HTML ne se pose pas sur une timeline : on le fait rendre en .mov à
+          // canal alpha (et en séquence PNG), 24 i/s, rangés dans le dossier.
           setEtapeZip(`rendu de ${a.fichier}…`);
           const r = await fetch("/api/rendu", { method: "POST", headers: { "Content-Type": "application/json" },
                                  body: JSON.stringify({ html: a.html, nom: a.fichier, fps: 24, duree: DUREE_ANIMATION }) });
           if (r.ok) {
             const sous = await JSZip.loadAsync(await r.blob());
             await Promise.all(Object.values(sous.files).map(async f => { if (!f.dir) z.file(f.name, await f.async("blob")); }));
-            lignes.push(`${a.fichier}/  ·  motion  ·  séquence PNG 24 i/s, ${DUREE_ANIMATION} s, fond transparent  ·  ${a.fichier}.png = image fixe`);
+            lignes.push(`${a.fichier}.mov  ·  motion  ·  vidéo ${DUREE_ANIMATION} s à fond transparent (+ séquence PNG dans ${a.fichier}/)  ·  ${a.fichier}.png = image fixe`);
           } else {
             z.file(`${a.fichier}.html`, a.html); lignes.push(`${a.fichier}.html  ·  motion  ·  rendu PNG indisponible, HTML fourni`);
           }
@@ -227,7 +227,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                                   if (!r.ok) { alert("Rendu indisponible pour l'instant."); return; }
                                   const u = URL.createObjectURL(await r.blob()); const l = document.createElement("a");
                                   l.href = u; l.download = `${a.fichier}.zip`; l.click(); setTimeout(() => URL.revokeObjectURL(u), 10_000);
-                                }}>Séquence PNG</button>}
+                                }}>Fichier vidéo (.mov)</button>}
                 </div>
               </div>
             ))}
