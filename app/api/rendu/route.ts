@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
-export const maxDuration = 300;
+export const maxDuration = 600;
 export const dynamic = "force-dynamic";
 
 /**
@@ -38,7 +38,7 @@ async function encoderMov(images: Buffer[], fps: number): Promise<Buffer | null>
     await Promise.all(images.map((img, i) => writeFile(join(dossier, `${String(i + 1).padStart(4, "0")}.png`), img)));
     const sortie = join(dossier, "sortie.mov");
     await executer(ffmpeg, ["-y", "-loglevel", "error", "-framerate", String(fps), "-i", join(dossier, "%04d.png"),
-                            "-c:v", "png", "-pix_fmt", "rgba", sortie], { timeout: 120_000 });
+                            "-c:v", "png", "-compression_level", "2", "-pix_fmt", "rgba", sortie], { timeout: 120_000 });
     return await readFile(sortie);
   } catch {
     return null;
@@ -90,7 +90,7 @@ export async function POST(req: Request) {
       for (let i = 0; i < images; i++) {
         const t = i / Number(fps);
         await figer(t);
-        const png = Buffer.from(await page.screenshot({ type: "png", omitBackground: true }));
+        const png = Buffer.from(await page.screenshot({ type: "png", omitBackground: true, optimizeForSpeed: true }));
         trames.push(png);
         dossier.file(`${base}${suffixe}_${String(i + 1).padStart(4, "0")}.png`, png);
       }
@@ -98,7 +98,7 @@ export async function POST(req: Request) {
       if (mov) { zip.file(`${base}${suffixe}.mov`, mov); avecMov = true; }
       if (fixe) {
         await figer(Number(duree) + 1);
-        zip.file(`${base}${suffixe}.png`, await page.screenshot({ type: "png", omitBackground: true }));
+        zip.file(`${base}${suffixe}.png`, await page.screenshot({ type: "png", omitBackground: true, optimizeForSpeed: true }));
       }
     };
     await capturer("");

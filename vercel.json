@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "app/api/rendu/route.ts": {
+      "memory": 3009,
+      "maxDuration": 600
+    }
+  }
+}

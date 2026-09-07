@@ -122,7 +122,8 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     return () => { arret = true; clearInterval(t); };
   }, [prod?.lancee, prod?.articles.map(a => a.statut).join(","), prod?.articles.length]);
 
-  /* Les gabarits se rendent dès que la production existe, deux à la fois,
+  /* Les gabarits se rendent dès que la production existe, un par un — deux
+     de front se partagent le même serveur et dépassent tous deux le délai —,
      sans qu'on le demande : un fichier prêt est un fichier téléchargeable.
      Le résultat est gardé en mémoire, et déposé sur le compte s'il y en a un. */
   const [rendus, setRendus] = useState<Record<string, "en-cours" | "pret" | "echec" | undefined>>({});
@@ -157,7 +158,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       }
       await suivant();
     };
-    suivant(); suivant();
+    suivant();
   }, [prod?.lancee, prod?.articles.length, tour]);
 
   /** Les fichiers d'un gabarit : de la mémoire, sinon du compte, sinon rendus maintenant. */
