@@ -104,41 +104,42 @@ export function rendre(html: string, params: Record<string, any>): string {
  *  charte sont injectées ici : elles ne traversent pas la frontière d'une iframe. */
 /**
  * L'entrée animée générique d'un gabarit, en CSS pur : le cadre se pose, puis
- * chaque élément monte et apparaît, l'un après l'autre. Un gabarit sur mesure
+ * chaque élément monte et apparaît, l'un après l'autre — à 0,3 s d'écart, assez
+ * pour qu'on voie 1, puis 2, puis 3 arriver. Un gabarit sur mesure
  * peut apporter son propre mouvement (`animation`) : il remplace celle-ci.
  *
  * Le rendu image par image ne dépend pas de ces règles : il fige la page à
  * l'instant t par l'API Web Animations, quelles que soient les animations
  * présentes. Ici, tout joue naturellement dans l'aperçu.
  */
-export const DUREE_ANIMATION = 2.5;
+export const DUREE_ANIMATION = 3.2;
 export const dureeDe = (g?: Pick<Gabarit, "duree"> | null) => g?.duree && g.duree > 0 ? g.duree : DUREE_ANIMATION;
 
 const ANIMATION = `
 .g{animation:g-cadre .6s cubic-bezier(.2,.9,.2,1) both}
-.g > *{animation:g-elem .65s cubic-bezier(.2,.9,.2,1) both}
-.g > *:nth-child(1){animation-delay:.25s}
-.g > *:nth-child(2){animation-delay:.38s}
-.g > *:nth-child(3){animation-delay:.51s}
-.g > *:nth-child(4){animation-delay:.64s}
-.g > *:nth-child(5){animation-delay:.77s}
-.g > *:nth-child(6){animation-delay:.9s}
-.g > *:nth-child(n+7){animation-delay:1.03s}
+.g > *{animation:g-elem .6s cubic-bezier(.2,.9,.2,1) both}
+.g > *:nth-child(1){animation-delay:.2s}
+.g > *:nth-child(2){animation-delay:.5s}
+.g > *:nth-child(3){animation-delay:.8s}
+.g > *:nth-child(4){animation-delay:1.1s}
+.g > *:nth-child(5){animation-delay:1.4s}
+.g > *:nth-child(6){animation-delay:1.7s}
+.g > *:nth-child(n+7){animation-delay:2s}
 .g > * > *{animation:g-elem .55s cubic-bezier(.2,.9,.2,1) both}
-.g > * > *:nth-child(1){animation-delay:.55s}
-.g > * > *:nth-child(2){animation-delay:.68s}
-.g > * > *:nth-child(3){animation-delay:.81s}
-.g > * > *:nth-child(4){animation-delay:.94s}
-.g > * > *:nth-child(5){animation-delay:1.07s}
-.g > * > *:nth-child(n+6){animation-delay:1.2s}
+.g > * > *:nth-child(1){animation-delay:.45s}
+.g > * > *:nth-child(2){animation-delay:.8s}
+.g > * > *:nth-child(3){animation-delay:1.15s}
+.g > * > *:nth-child(4){animation-delay:1.5s}
+.g > * > *:nth-child(5){animation-delay:1.85s}
+.g > * > *:nth-child(n+6){animation-delay:2.2s}
 .g > * > * > *{animation:g-elem .5s cubic-bezier(.2,.9,.2,1) both}
-.g > * > * > *:nth-child(1){animation-delay:.8s}
-.g > * > * > *:nth-child(2){animation-delay:.93s}
-.g > * > * > *:nth-child(3){animation-delay:1.06s}
-.g > * > * > *:nth-child(4){animation-delay:1.19s}
-.g > * > * > *:nth-child(n+5){animation-delay:1.32s}
+.g > * > * > *:nth-child(1){animation-delay:.7s}
+.g > * > * > *:nth-child(2){animation-delay:1.05s}
+.g > * > * > *:nth-child(3){animation-delay:1.4s}
+.g > * > * > *:nth-child(4){animation-delay:1.75s}
+.g > * > * > *:nth-child(n+5){animation-delay:2.1s}
 @keyframes g-cadre{from{opacity:0;transform:scale(.9) translateY(2vw)}to{opacity:1;transform:none}}
-@keyframes g-elem{from{opacity:0;transform:translateY(2.5vw) scale(.94)}to{opacity:1;transform:none}}
+@keyframes g-elem{from{opacity:0;transform:translateY(3.5vw) scale(.9)}to{opacity:1;transform:none}}
 `;
 
 export function document(
