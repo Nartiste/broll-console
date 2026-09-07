@@ -84,7 +84,7 @@ export default function Connexion() {
 
         <p className="note">
           {authConfiguree()
-            ? "Vos projets restent pour l'instant dans ce navigateur ; la connexion sert à vous reconnaître. La synchronisation entre appareils arrive ensuite."
+            ? "Connecté, vos projets suivent votre compte d'un appareil à l'autre. Sans compte, ils restent dans ce navigateur."
             : "L'authentification n'est pas configurée sur ce déploiement. La console fonctionne en local : vos projets restent dans ce navigateur."}
         </p>
         <button className="btn fantome" style={{ marginTop: 14, width: "100%", justifyContent: "center" }}
