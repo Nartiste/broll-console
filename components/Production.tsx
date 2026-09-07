@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Plan } from "@/lib/analyse";
 import { DUREE_ANIMATION, dureeDe, document as documentGabarit, type Gabarit } from "@/lib/gabarits";
 import { TARIFS } from "@/lib/tarifs";
+import { cle, deposer, enCache, recuperer, rendre, telecharger } from "@/lib/rendus";
 import type { ArticleProd, Decision, Production as Prod, Projet } from "@/lib/store";
 
 const slug = (t: string) =>
@@ -23,9 +24,9 @@ const PILULE: Record<ArticleProd["statut"], [string, string]> = {
  *
  * On part des inserts GARDÉS. Les B-roll deviennent des tâches Seedance —
  * avec la vignette validée en référence, pour que le clip ressemble à ce qui
- * a été approuvé. Les gabarits sur mesure sont livrés en HTML autonome ; les
- * gabarits intégrés n'ont pas encore de fichier (le rendu vidéo des gabarits
- * est la brique suivante), et on le dit plutôt que de livrer du vide.
+ * a été approuvé. Les gabarits — sur mesure ou intégrés — se rendent en .mov
+ * à fond transparent dès que la production existe, et chaque fichier se
+ * télécharge dès qu'il est prêt.
  *
  * Tout est confirmé avant : nombre de clips, secondes, ordre de grandeur.
  */
@@ -71,7 +72,8 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
   const sansImage = clips.filter(c => !c.image).length;
 
   async function lancer() {
-    if (!clips.length) return;
+    // Sans B-roll, rien n'est facturé : la production, ce sont les gabarits à rendre.
+    if (!clips.length) { onMaj({ lancee: Date.now(), resolution, articles: candidats }); return; }
     if (!confirm(`Lancer ${clips.length} clip${clips.length > 1 ? "s" : ""} Seedance en ${resolution} — ${secondes} secondes de vidéo, ordre de grandeur ${cout.toFixed(2)} $ hors quota gratuit ?`)) return;
     setLancement("en-cours"); setErreur(null);
     try {
@@ -120,23 +122,64 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     return () => { arret = true; clearInterval(t); };
   }, [prod?.lancee, prod?.articles.map(a => a.statut).join(","), prod?.articles.length]);
 
-  /* Le rendu d'un gabarit prend jusqu'à trois minutes sur le serveur : le
-     bouton le dit, plutôt que de laisser croire qu'il ne fait rien. */
-  const [rendu, setRendu] = useState<Record<string, "en-cours" | "erreur" | undefined>>({});
-  async function rendreArticle(a: ArticleProd) {
-    if (!a.html) return;
-    setRendu(q => ({ ...q, [a.fichier]: "en-cours" }));
+  /* Les gabarits se rendent dès que la production existe, deux à la fois,
+     sans qu'on le demande : un fichier prêt est un fichier téléchargeable.
+     Le résultat est gardé en mémoire, et déposé sur le compte s'il y en a un. */
+  const [rendus, setRendus] = useState<Record<string, "en-cours" | "pret" | "echec" | undefined>>({});
+  const [tour, setTour] = useState(0);
+  const lances = useRef(new Set<string>());
+  const prodRef = useRef(prod); prodRef.current = prod;
+  useEffect(() => {
+    if (!prod) return;
+    setRendus(q => {
+      const n = { ...q };
+      for (const a of prod.articles) if (a.html && (enCache(cle(projet.id, a.fichier)) || a.movChemin) && n[a.fichier] !== "en-cours") n[a.fichier] = "pret";
+      return n;
+    });
+    const file = prod.articles.filter(a => a.html && !enCache(cle(projet.id, a.fichier)) && !a.movChemin && !lances.current.has(a.fichier));
+    let i = 0;
+    const suivant = async (): Promise<void> => {
+      const a = file[i++];
+      if (!a || !a.html) return;
+      lances.current.add(a.fichier);
+      setRendus(q => ({ ...q, [a.fichier]: "en-cours" }));
+      try {
+        const f = await rendre(projet.id, { html: a.html, fichier: a.fichier, duree: a.dureeAnim || DUREE_ANIMATION });
+        setRendus(q => ({ ...q, [a.fichier]: "pret" }));
+        const chemins = await deposer(projet.id, a.fichier, f);
+        const courant = prodRef.current;
+        if (chemins && courant) {
+          onMaj({ ...courant, articles: courant.articles.map(x => x.fichier === a.fichier ? { ...x, movChemin: chemins.mov, pngChemin: chemins.png } : x) });
+        }
+      } catch {
+        setRendus(q => ({ ...q, [a.fichier]: "echec" }));
+        lances.current.delete(a.fichier);
+      }
+      await suivant();
+    };
+    suivant(); suivant();
+  }, [prod?.lancee, prod?.articles.length, tour]);
+
+  /** Les fichiers d'un gabarit : de la mémoire, sinon du compte, sinon rendus maintenant. */
+  async function fichiersDe(a: ArticleProd): Promise<{ mov: Blob; png?: Blob; zip?: Blob } | null> {
+    const c = enCache(cle(projet.id, a.fichier));
+    if (c) return c;
+    if (a.movChemin) {
+      const mov = await recuperer(a.movChemin);
+      if (mov) return { mov, png: a.pngChemin ? (await recuperer(a.pngChemin)) || undefined : undefined };
+    }
+    if (!a.html) return null;
+    setRendus(q => ({ ...q, [a.fichier]: "en-cours" }));
     try {
-      const r = await fetch("/api/rendu", { method: "POST", headers: { "Content-Type": "application/json" },
-                             body: JSON.stringify({ html: a.html, nom: a.fichier, fps: 24, duree: a.dureeAnim || DUREE_ANIMATION }) });
-      if (!r.ok) throw new Error(String(r.status));
-      const u = URL.createObjectURL(await r.blob()); const l = document.createElement("a");
-      l.href = u; l.download = `${a.fichier}.zip`; l.click(); setTimeout(() => URL.revokeObjectURL(u), 10_000);
-      setRendu(q => ({ ...q, [a.fichier]: undefined }));
+      const f = await rendre(projet.id, { html: a.html, fichier: a.fichier, duree: a.dureeAnim || DUREE_ANIMATION });
+      setRendus(q => ({ ...q, [a.fichier]: "pret" }));
+      return f;
     } catch {
-      setRendu(q => ({ ...q, [a.fichier]: "erreur" }));
+      setRendus(q => ({ ...q, [a.fichier]: "echec" }));
+      return null;
     }
   }
+  const relancer = (a: ArticleProd) => { lances.current.delete(a.fichier); setRendus(q => ({ ...q, [a.fichier]: undefined })); setTour(t => t + 1); };
 
   /* Le dossier est fait pour Premiere, pas pour l'archivage : ce qu'on pose
      sur la timeline est au premier niveau, numéroté dans l'ordre du script,
@@ -158,29 +201,23 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
             timeline.push(`${timecode(a.n)}  ${a.fichier}.mp4  ·  B-roll ${a.duree} s  ·  piste V2, en coupe sur le plan`);
           }
         } else if (a.html) {
-          setEtapeZip(`rendu de ${a.fichier}…`);
-          const r = await fetch("/api/rendu", { method: "POST", headers: { "Content-Type": "application/json" },
-                                 body: JSON.stringify({ html: a.html, nom: a.fichier, fps: 24, duree: a.dureeAnim || DUREE_ANIMATION }) });
-          if (!r.ok) {
+          setEtapeZip(`${a.fichier}…`);
+          const f = await fichiersDe(a);
+          if (!f) {
             z.file(`03-SOURCES/${a.fichier}/${a.fichier}.html`, a.html);
             timeline.push(`${timecode(a.n)}  ${a.fichier}  ·  motion  ·  RENDU IMPOSSIBLE, HTML dans 03-SOURCES`);
             continue;
           }
-          const sous = await JSZip.loadAsync(await r.blob());
-          const noms = Object.keys(sous.files);
-          const alpha = noms.includes(`${a.fichier}_alpha.mov`);
-          const movPose = alpha ? `${a.fichier}_alpha.mov` : `${a.fichier}.mov`;
-          const pngPose = alpha ? `${a.fichier}_alpha.png` : `${a.fichier}.png`;
-          let pose = false;
-          await Promise.all(Object.values(sous.files).map(async f => {
-            if (f.dir) return;
-            const blob = await f.async("blob");
-            if (f.name === movPose) { z.file(`01-TIMELINE/${a.fichier}.mov`, blob); pose = true; }
-            else if (f.name === pngPose) z.file(`02-IMAGES-FIXES/${a.fichier}.png`, blob);
-            else if (f.name.endsWith("_LISEZMOI.txt")) return;   // remplacé par le LISEZMOI global
-            else z.file(`03-SOURCES/${f.name}`, blob);
-          }));
-          timeline.push(`${timecode(a.n)}  ${a.fichier}.${pose ? "mov" : "png"}  ·  motion ${a.dureeAnim || DUREE_ANIMATION} s  ·  piste V3, PAR-DESSUS le plan (fond transparent)`);
+          z.file(`01-TIMELINE/${a.fichier}.mov`, f.mov);
+          if (f.png) z.file(`02-IMAGES-FIXES/${a.fichier}.png`, f.png);
+          if (f.zip) {
+            const sous = await JSZip.loadAsync(f.zip);
+            await Promise.all(Object.values(sous.files).map(async x => {
+              if (x.dir || x.name.endsWith(".mov") || x.name.endsWith("_LISEZMOI.txt") || /^[^/]+\.png$/.test(x.name)) return;
+              z.file(`03-SOURCES/${x.name}`, await x.async("blob"));
+            }));
+          }
+          timeline.push(`${timecode(a.n)}  ${a.fichier}.mov  ·  motion ${a.dureeAnim || DUREE_ANIMATION} s  ·  piste V3, PAR-DESSUS le plan (fond transparent)`);
         }
       }
       z.file("00-LISEZMOI.txt",
@@ -233,8 +270,8 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
           )}
           {erreur && <p style={{ color: "var(--alerte)", marginTop: 10, fontSize: 13 }}>{erreur}</p>}
           <div style={{ display: "flex", gap: 10, marginTop: 14, alignItems: "center", flexWrap: "wrap" }}>
-            <button className="btn" disabled={!clips.length || lancement === "en-cours"} onClick={lancer}>
-              {lancement === "en-cours" ? "Envoi à Seedance…" : clips.length ? `Lancer ${clips.length} clip${clips.length > 1 ? "s" : ""}` : "Aucun clip B-roll gardé"}
+            <button className="btn" disabled={lancement === "en-cours" || !candidats.length} onClick={lancer}>
+              {lancement === "en-cours" ? "Envoi à Seedance…" : clips.length ? `Lancer ${clips.length} clip${clips.length > 1 ? "s" : ""}` : `Rendre ${candidats.length} gabarit${candidats.length > 1 ? "s" : ""}`}
             </button>
             <span className="muet" style={{ fontSize: 12.5 }}>C&apos;est ici que l&apos;argent part. Rien avant ce clic.</span>
           </div>
@@ -248,6 +285,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
             <span>{prod.resolution}</span>
             <span>{prets} prêt{prets > 1 ? "s" : ""}</span>
             <span>{enCours} en cours{enCours ? " · vérification toutes les 10 s" : ""}</span>
+            {prod.articles.some(a => a.html) && <span>gabarits rendus {prod.articles.filter(a => a.html && rendus[a.fichier] === "pret").length}/{prod.articles.filter(a => a.html).length}</span>}
           </div>
           <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
             {prod.articles.map(a => (
@@ -260,16 +298,33 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                     {a.erreur && <span style={{ color: a.statut === "echec" ? "var(--alerte)" : "var(--encre-3)" }}> — {a.erreur}</span>}
                   </div>
                 </div>
-                <span className="pilule" style={{ justifySelf: "start", color: PILULE[a.statut][1], borderColor: PILULE[a.statut][1] }}>{PILULE[a.statut][0]}</span>
+                {(() => {
+                  const e = a.html ? (rendus[a.fichier] === "pret" ? "pret" : rendus[a.fichier] === "echec" ? "echec" : "en-cours") : a.statut;
+                  const [texte, couleur] = e === "en-cours" && a.html ? ["rendu…", "var(--signal)"] : PILULE[e];
+                  return <span className="pilule" style={{ justifySelf: "start", color: couleur, borderColor: couleur }}>{texte}</span>;
+                })()}
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   {a.video && <video src={a.video} controls preload="metadata" style={{ width: 160, borderRadius: 8, background: "#000" }} />}
                   {a.video && <a className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
                                  href={`/api/production/fichier?url=${encodeURIComponent(a.video)}&nom=${a.fichier}.mp4`}>Télécharger</a>}
-                  {a.html && <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
-                                disabled={rendu[a.fichier] === "en-cours"}
-                                onClick={() => rendreArticle(a)}>
-                    {rendu[a.fichier] === "en-cours" ? "Rendu en cours… (jusqu'à 3 min)" : rendu[a.fichier] === "erreur" ? "Réessayer le rendu" : "Fichier vidéo (.mov)"}
-                  </button>}
+                  {a.html && (
+                    rendus[a.fichier] === "pret" ? (
+                      <>
+                        <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
+                                onClick={async () => { const f = await fichiersDe(a); if (f) telecharger(f.mov, `${a.fichier}.mov`); }}>
+                          Télécharger .mov
+                        </button>
+                        <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }} title="L'état final, en PNG transparent"
+                                onClick={async () => { const f = await fichiersDe(a); if (f?.png) telecharger(f.png, `${a.fichier}.png`); }}>
+                          Image fixe
+                        </button>
+                      </>
+                    ) : rendus[a.fichier] === "echec" ? (
+                      <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }} onClick={() => relancer(a)}>Réessayer le rendu</button>
+                    ) : (
+                      <span className="muet mono" style={{ fontSize: 12 }}>rendu en cours · jusqu'à 3 min</span>
+                    )
+                  )}
                 </div>
               </div>
             ))}
@@ -278,7 +333,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
             <button className="btn" disabled={zip === "en-cours" || (prets === 0 && !prod.articles.some(a => a.html))} onClick={telechargerDossier}>
               {zip === "en-cours" ? (etapeZip || "Assemblage du dossier…") : "Télécharger le dossier"}
             </button>
-            <span className="muet" style={{ fontSize: 12.5 }}>01-TIMELINE (un fichier par insert, dans l'ordre), 02-IMAGES-FIXES, 03-SOURCES, et un LISEZMOI avec l'ordre de montage. Comptez jusqu'à trois minutes par gabarit.</span>
+            <span className="muet" style={{ fontSize: 12.5 }}>01-TIMELINE (un fichier par insert, dans l'ordre), 02-IMAGES-FIXES, 03-SOURCES, et un LISEZMOI avec l'ordre de montage. Les fichiers déjà rendus ne sont pas refaits.</span>
             <button className="btn fantome" style={{ marginLeft: "auto" }} onClick={() => { if (confirm("Oublier cette production et repartir du tri ?")) onMaj(undefined as any); }}>
               Nouvelle production
             </button>
