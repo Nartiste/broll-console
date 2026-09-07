@@ -33,7 +33,8 @@ export default function Console({ initial }: { initial: Projet }) {
   });
   const [vise, setVise] = useState(1);
   const [charge, setCharge] = useState<string | null>(null);
-  const [prodOuverte, setProdOuverte] = useState(false);
+  /* Le panneau de production s'ouvre de lui-même quand une production existe, et se ferme quand on le demande. */
+  const [prodOuverte, setProdOuverte] = useState(() => Boolean(projet.production));
   const modale = useRef<HTMLDialogElement>(null);
 
   /* Le plan se recompose localement à partir des choix : les curseurs
@@ -737,7 +738,7 @@ export default function Console({ initial }: { initial: Projet }) {
               </div>
             </div>
           )}
-          {(prodOuverte || projet.production) && (
+          {prodOuverte && (
             <Production projet={projet} plan={plan} dec={dec} vars={vars} gabaritPour={gabaritPour}
                         onMaj={prodn => { setProjet(p => ({ ...p, production: prodn })); majProjet(projet.id, { production: prodn }); }}
                         onFermer={() => setProdOuverte(false)} />

@@ -254,7 +254,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
               <div key={a.n} style={{ display: "grid", gridTemplateColumns: "minmax(200px, 1fr) 120px auto", gap: 14, alignItems: "center",
                                        padding: "10px 12px", border: "1px solid var(--trait)", borderRadius: 12, background: "var(--surface-2)" }}>
                 <div>
-                  <div className="mono" style={{ fontSize: 12.5 }}>{a.fichier}.{a.moteur === "broll" ? "mp4" : "html"}</div>
+                  <div className="mono" style={{ fontSize: 12.5 }}>{a.fichier}.{a.moteur === "broll" ? "mp4" : "mov"}</div>
                   <div className="muet" style={{ fontSize: 11.5, marginTop: 2 }}>
                     {a.moteur === "broll" ? `B-roll · ${a.duree}s${a.image ? " · depuis la vignette validée" : " · depuis le prompt seul"}` : `Motion · ${a.forme}${a.html ? ` · ${a.dureeAnim || DUREE_ANIMATION} s · .mov à fond transparent` : ""}`}
                     {a.erreur && <span style={{ color: a.statut === "echec" ? "var(--alerte)" : "var(--encre-3)" }}> — {a.erreur}</span>}
