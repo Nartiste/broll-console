@@ -8,6 +8,10 @@ export default {
    *  l'utilisateur conclure à une régression. */
   env: { NEXT_PUBLIC_BUILD: (process.env.VERCEL_GIT_COMMIT_SHA || "dev").slice(0, 7) },
 
+  /** Le rendu des gabarits passe par un Chromium headless : binaire natif,
+   *  à laisser hors du bundle. */
+  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
+
   /**
    * Une seule adresse. Chaque déploiement Vercel garde pour toujours sa
    * propre adresse (broll-console-<hash>-prception.vercel.app), son code de

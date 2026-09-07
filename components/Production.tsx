@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Plan } from "@/lib/analyse";
-import { document as documentGabarit, type Gabarit } from "@/lib/gabarits";
+import { DUREE_ANIMATION, document as documentGabarit, type Gabarit } from "@/lib/gabarits";
 import { TARIFS } from "@/lib/tarifs";
 import type { ArticleProd, Decision, Production as Prod, Projet } from "@/lib/store";
 
@@ -38,6 +38,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
   const [lancement, setLancement] = useState<"repos" | "en-cours" | "erreur">("repos");
   const [erreur, setErreur] = useState<string | null>(null);
   const [zip, setZip] = useState<"repos" | "en-cours">("repos");
+  const [etapeZip, setEtapeZip] = useState("");
   const prod = projet.production;
 
   /* Ce qui partirait si on lançait maintenant — recalculé à chaque tri. */
@@ -55,9 +56,11 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                  image: d.images?.[d.variante] || null };
       }
       const g = gabaritPour(i.forme);
+      // Le gabarit part animé et sur fond transparent : c'est ce que le
+      // rendu fige image par image, et ce que le montage superpose au plan.
       return g
-        ? { ...base, statut: "pret" as const, html: documentGabarit(g, i.params || {}, vars) }
-        : { ...base, statut: "sans-objet" as const, erreur: "Gabarit intégré : rendu vidéo à venir. Le contenu est dans « ce que reçoit la machine »." };
+        ? { ...base, statut: "pret" as const, html: documentGabarit(g, i.params || {}, vars, false, { anime: true, transparent: true }) }
+        : { ...base, statut: "sans-objet" as const, erreur: "Gabarit intégré : pas encore de rendu. Déposez un composant à l'étape 2 pour cette forme, ou basculez l'insert en B-roll." };
     });
   }, [plan, dec, vars, gabaritPour]);
 
@@ -128,7 +131,18 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
           const r = await fetch(`/api/production/fichier?url=${encodeURIComponent(a.video)}&nom=${a.fichier}.mp4`);
           if (r.ok) { z.file(`${a.fichier}.mp4`, await r.blob()); lignes.push(`${a.fichier}.mp4  ·  B-roll  ·  ${a.duree}s`); }
         } else if (a.html) {
-          z.file(`${a.fichier}.html`, a.html); lignes.push(`${a.fichier}.html  ·  motion (gabarit sur mesure, 16:9, ouvrir dans un navigateur)`);
+          // Un HTML ne se pose pas sur une timeline : on le fait rendre en séquence PNG
+          // à canal alpha, 24 i/s, et on la range dans le dossier de l'insert.
+          setEtapeZip(`rendu de ${a.fichier}…`);
+          const r = await fetch("/api/rendu", { method: "POST", headers: { "Content-Type": "application/json" },
+                                 body: JSON.stringify({ html: a.html, nom: a.fichier, fps: 24, duree: DUREE_ANIMATION }) });
+          if (r.ok) {
+            const sous = await JSZip.loadAsync(await r.blob());
+            await Promise.all(Object.values(sous.files).map(async f => { if (!f.dir) z.file(f.name, await f.async("blob")); }));
+            lignes.push(`${a.fichier}/  ·  motion  ·  séquence PNG 24 i/s, ${DUREE_ANIMATION} s, fond transparent  ·  ${a.fichier}.png = image fixe`);
+          } else {
+            z.file(`${a.fichier}.html`, a.html); lignes.push(`${a.fichier}.html  ·  motion  ·  rendu PNG indisponible, HTML fourni`);
+          }
         }
       }
       z.file("00-ORDRE.txt", `${projet.titre}\n\nFichiers en ordre de script — descendez le dossier en descendant la timeline.\n\n${lignes.join("\n")}\n`);
@@ -136,7 +150,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob); a.download = `${slug(projet.titre)}-broll.zip`; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
-    } finally { setZip("repos"); }
+    } finally { setZip("repos"); setEtapeZip(""); }
   }
 
   const prets = prod?.articles.filter(a => a.statut === "pret").length || 0;
@@ -197,7 +211,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                 <div>
                   <div className="mono" style={{ fontSize: 12.5 }}>{a.fichier}.{a.moteur === "broll" ? "mp4" : "html"}</div>
                   <div className="muet" style={{ fontSize: 11.5, marginTop: 2 }}>
-                    {a.moteur === "broll" ? `B-roll · ${a.duree}s${a.image ? " · depuis la vignette validée" : " · depuis le prompt seul"}` : `Motion · ${a.forme}`}
+                    {a.moteur === "broll" ? `B-roll · ${a.duree}s${a.image ? " · depuis la vignette validée" : " · depuis le prompt seul"}` : `Motion · ${a.forme}${a.html ? " · séquence PNG alpha dans le dossier" : ""}`}
                     {a.erreur && <span style={{ color: a.statut === "echec" ? "var(--alerte)" : "var(--encre-3)" }}> — {a.erreur}</span>}
                   </div>
                 </div>
@@ -206,17 +220,23 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                   {a.video && <video src={a.video} controls preload="metadata" style={{ width: 160, borderRadius: 8, background: "#000" }} />}
                   {a.video && <a className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
                                  href={`/api/production/fichier?url=${encodeURIComponent(a.video)}&nom=${a.fichier}.mp4`}>Télécharger</a>}
-                  {a.html && <a className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
-                                href={`data:text/html;charset=utf-8,${encodeURIComponent(a.html)}`} download={`${a.fichier}.html`}>Télécharger</a>}
+                  {a.html && <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
+                                onClick={async () => {
+                                  const r = await fetch("/api/rendu", { method: "POST", headers: { "Content-Type": "application/json" },
+                                                         body: JSON.stringify({ html: a.html, nom: a.fichier, fps: 24, duree: DUREE_ANIMATION }) });
+                                  if (!r.ok) { alert("Rendu indisponible pour l'instant."); return; }
+                                  const u = URL.createObjectURL(await r.blob()); const l = document.createElement("a");
+                                  l.href = u; l.download = `${a.fichier}.zip`; l.click(); setTimeout(() => URL.revokeObjectURL(u), 10_000);
+                                }}>Séquence PNG</button>}
                 </div>
               </div>
             ))}
           </div>
           <div style={{ display: "flex", gap: 10, marginTop: 14, alignItems: "center", flexWrap: "wrap" }}>
             <button className="btn" disabled={zip === "en-cours" || (prets === 0 && !prod.articles.some(a => a.html))} onClick={telechargerDossier}>
-              {zip === "en-cours" ? "Assemblage du dossier…" : "Télécharger le dossier"}
+              {zip === "en-cours" ? (etapeZip || "Assemblage du dossier…") : "Télécharger le dossier"}
             </button>
-            <span className="muet" style={{ fontSize: 12.5 }}>Numéroté en ordre de script, avec un fichier 00-ORDRE.txt. Plus qu&apos;à poser sur la timeline.</span>
+            <span className="muet" style={{ fontSize: 12.5 }}>Clips en MP4, gabarits en séquences PNG à fond transparent (24 i/s), numérotés en ordre de script, avec 00-ORDRE.txt. Premiere importe une séquence PNG comme une vidéo.</span>
             <button className="btn fantome" style={{ marginLeft: "auto" }} onClick={() => { if (confirm("Oublier cette production et repartir du tri ?")) onMaj(undefined as any); }}>
               Nouvelle production
             </button>

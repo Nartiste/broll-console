@@ -97,19 +97,57 @@ export function rendre(html: string, params: Record<string, any>): string {
 
 /** Le document complet à afficher dans une iframe isolée. Les variables de
  *  charte sont injectées ici : elles ne traversent pas la frontière d'une iframe. */
-export function document(g: Gabarit, params: Record<string, any>, vars: Record<string, string>, sombre = false): string {
+/**
+ * L'entrée animée d'un gabarit, en CSS pur : le cadre se pose, puis chaque
+ * élément de premier niveau monte et apparaît, l'un après l'autre. Tout est
+ * piloté par une seule variable, --t : l'animation est mise en pause et
+ * décalée de -t secondes, ce qui la FIGE exactement à l'instant t. Un rendu
+ * image par image devient une suite de captures déterministes.
+ */
+export const DUREE_ANIMATION = 2.5;
+
+const ANIMATION = `
+:root{--t:0s}
+.g{animation:g-cadre .55s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(-1 * var(--t));animation-play-state:paused}
+.g > *{animation:g-elem .6s cubic-bezier(.2,.8,.2,1) both;animation-play-state:paused}
+.g > *:nth-child(1){animation-delay:calc(.25s - var(--t))}
+.g > *:nth-child(2){animation-delay:calc(.35s - var(--t))}
+.g > *:nth-child(3){animation-delay:calc(.45s - var(--t))}
+.g > *:nth-child(4){animation-delay:calc(.55s - var(--t))}
+.g > *:nth-child(5){animation-delay:calc(.65s - var(--t))}
+.g > *:nth-child(6){animation-delay:calc(.75s - var(--t))}
+.g > *:nth-child(n+7){animation-delay:calc(.85s - var(--t))}
+.g > * > *{animation:g-elem .5s cubic-bezier(.2,.8,.2,1) both;animation-play-state:paused}
+.g > * > *:nth-child(1){animation-delay:calc(.5s - var(--t))}
+.g > * > *:nth-child(2){animation-delay:calc(.6s - var(--t))}
+.g > * > *:nth-child(3){animation-delay:calc(.7s - var(--t))}
+.g > * > *:nth-child(4){animation-delay:calc(.8s - var(--t))}
+.g > * > *:nth-child(5){animation-delay:calc(.9s - var(--t))}
+.g > * > *:nth-child(n+6){animation-delay:calc(1s - var(--t))}
+@keyframes g-cadre{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+@keyframes g-elem{from{opacity:0;transform:translateY(1.2vw)}to{opacity:1;transform:none}}
+`;
+
+export function document(
+  g: Gabarit, params: Record<string, any>, vars: Record<string, string>, sombre = false,
+  opts: { anime?: boolean; transparent?: boolean } = {},
+): string {
   const v = { ...vars };
   if (sombre) {
     v["--da-fond"] = vars["--da-fond-sombre"];
     v["--da-encre"] = vars["--da-encre-sombre"];
   }
   const racine = Object.entries(v).map(([k, val]) => `${k}:${val}`).join(";");
+  // Transparent : le fond de page disparaît, seul ce que le gabarit peint reste — l'alpha
+  // du PNG est alors vrai, et le motion se superpose au plan dans le montage.
+  const fond = opts.transparent ? "transparent" : "var(--da-fond)";
   return `<!doctype html><meta charset="utf-8"><style>
 :root{${racine}}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--da-fond);color:var(--da-encre);font-family:var(--da-titre);font-size:4vw}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:${fond};color:var(--da-encre);font-family:var(--da-titre);font-size:4vw}
 *{box-sizing:border-box}
 .g{width:100%;height:100%;position:relative}
 ${g.css}
+${opts.anime ? ANIMATION : ""}
 </style><div class="g">${rendre(g.html, params)}</div>`;
 }
 
