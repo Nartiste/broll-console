@@ -45,11 +45,13 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     const gardes = plan.inserts.filter(i => dec(i.n).etat === "oui");
     return gardes.map((i, k) => {
       const d = dec(i.n);
+      const moteur = d.moteur || i.moteur;   // le choix de l'auteur l'emporte
       const base = { n: i.n, fichier: `${String(k + 1).padStart(2, "0")}-${slug(i.texte[0] || "")}`,
-                     moteur: i.moteur, forme: i.forme, duree: i.duree };
-      if (i.moteur === "broll") {
+                     moteur, forme: i.forme, duree: i.duree };
+      if (moteur === "broll") {
         return { ...base, statut: "attente" as const,
                  prompt: i.variantes?.[d.variante] || i.variantes?.[0] || i.texte.join(" "),
+                 mouvement: d.mouvement?.trim() || i.mouvement || "",
                  image: d.images?.[d.variante] || null };
       }
       const g = gabaritPour(i.forme);
@@ -71,7 +73,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     try {
       const r = await fetch("/api/production", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resolution, articles: clips.map(c => ({ n: c.n, prompt: c.prompt, image: c.image, duree: c.duree })) }),
+        body: JSON.stringify({ resolution, articles: clips.map(c => ({ n: c.n, prompt: c.prompt, mouvement: c.mouvement, image: c.image, duree: c.duree })) }),
       });
       const c = await r.json();
       if (!r.ok) throw new Error(c.erreur || "Lancement impossible");

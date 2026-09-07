@@ -5,6 +5,7 @@ import Link from "next/link";
 import { composer, analyser, CADRAGE_DEFAUT } from "@/lib/analyse";
 import { derive, variables, variablesBrutes, type DA } from "@/lib/da";
 import { EXEMPLES, LIBELLES, SLOTS, type FormeMotion, type Gabarit } from "@/lib/gabarits";
+import { troisPrompts } from "@/lib/images";
 import { Comp } from "./Vignette";
 import GabaritApercu from "./GabaritApercu";
 import Production from "./Production";
@@ -59,11 +60,12 @@ export default function Console({ initial }: { initial: Projet }) {
   async function genererVignettes(n: number) {
     if (analyse === "en-cours") return;   // le plan va changer sous nos pieds
     const ins = plan.inserts.find(i => i.n === n);
-    if (!ins || ins.moteur !== "broll" || !ins.variantes?.length) return;
+    if (!ins) return;
     setGeneration(g => ({ ...g, [n]: "en-cours" })); setGenErreur(null);
     try {
       const note = dec(n).note?.trim();
-      const prompts = note ? ins.variantes.map(p => `${p} Retouche demandée : ${note}.`) : ins.variantes;
+      const base = promptsDe(ins);
+      const prompts = note ? base.map(p => `${p} Retouche demandée : ${note}.`) : base;
       const r = await fetch("/api/vignettes", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompts }),
@@ -82,7 +84,7 @@ export default function Console({ initial }: { initial: Projet }) {
   }
 
   async function genererToutes() {
-    const cibles = plan.inserts.filter(i => i.moteur === "broll" && dec(i.n).etat !== "non" && !dec(i.n).images);
+    const cibles = plan.inserts.filter(i => dec(i.n).etat !== "non" && !dec(i.n).images);
     if (!cibles.length) return;
     if (!confirm(`Générer ${cibles.length * 3} images (${cibles.length} inserts × 3 variantes) ? Ordre de grandeur : ${(cibles.length * 3 * 0.03).toFixed(2)} $ hors quota gratuit.`)) return;
     for (const i of cibles) await genererVignettes(i.n);
@@ -175,6 +177,13 @@ export default function Console({ initial }: { initial: Projet }) {
 
   const dec = (n: number): Decision => projet.decisions[n] || VIDE;
 
+  /* Le moteur du modèle est une proposition ; celui de l'auteur l'emporte.
+     Et tout insert a ses prompts d'image — les analyses antérieures à cette
+     règle en reçoivent à la volée, depuis le registre du projet. */
+  const moteurDe = (i: { n: number; moteur: "broll" | "motion" }) => dec(i.n).moteur || i.moteur;
+  const promptsDe = (i: { texte: string[]; variantes?: string[] }) =>
+    i.variantes?.length ? i.variantes : troisPrompts(i.texte[0] || "", projet.da.registre);
+
   function majDec(n: number, patch: Partial<Decision>) {
     const decisions = { ...projet.decisions, [n]: { ...dec(n), ...patch } };
     setProjet(p => ({ ...p, decisions }));
@@ -227,8 +236,8 @@ export default function Console({ initial }: { initial: Projet }) {
 
   const compte = (k: Etat) => plan.inserts.filter(i => dec(i.n).etat === k).length;
   const reste = plan.inserts.length - compte("oui") - compte("presque") - compte("non");
-  const brolls = plan.inserts.filter(i => i.moteur === "broll" && dec(i.n).etat !== "non");
-  const motions = plan.inserts.filter(i => i.moteur === "motion" && dec(i.n).etat !== "non");
+  const brolls = plan.inserts.filter(i => moteurDe(i) === "broll" && dec(i.n).etat !== "non");
+  const motions = plan.inserts.filter(i => moteurDe(i) === "motion" && dec(i.n).etat !== "non");
   const secondes = brolls.reduce((t, i) => t + Math.min(i.duree, projet.cadrage.dureeMax), 0);
 
   const conformite = projet.da.mesure ? derive(projet.da.accent, projet.da.mesure.accent) : null;
@@ -646,7 +655,7 @@ export default function Console({ initial }: { initial: Projet }) {
                   }
                   el.push(
                     <i key={i.n}
-                       className={`${i.moteur === "motion" ? "motion " : ""}${hors ? "hors " : ""}${i.n === vise ? "vise" : ""}`}
+                       className={`${moteurDe(i) === "motion" ? "motion " : ""}${hors ? "hors " : ""}${i.n === vise ? "vise" : ""}`}
                        title={`#${i.n} · ${tc(i.entree)} · ${i.duree}s`}
                        style={{ left: `${(100 * i.entree) / plan.script.duree}%`,
                                 width: `${Math.max(0.5, (100 * i.duree) / plan.script.duree)}%` }}
@@ -668,15 +677,15 @@ export default function Console({ initial }: { initial: Projet }) {
               </span>
             </div>
             {(() => {
-              const restantes = plan.inserts.filter(i => i.moteur === "broll" && dec(i.n).etat !== "non" && !dec(i.n).images).length;
+              const restantes = plan.inserts.filter(i => dec(i.n).etat !== "non" && !dec(i.n).images).length;
               const enCours = Object.values(generation).includes("en-cours");
               return restantes > 0 ? (
                 <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
                   <button className="btn" disabled={enCours} onClick={genererToutes}>
-                    {enCours ? "Génération en cours…" : `Générer les vignettes B-roll · ${restantes} insert${restantes > 1 ? "s" : ""} × 3`}
+                    {enCours ? "Génération en cours…" : `Générer les vignettes · ${restantes} insert${restantes > 1 ? "s" : ""} × 3`}
                   </button>
                   <span className="muet" style={{ fontSize: 12 }}>
-                    Les aperçus factices deviennent de vraies images. C'est l'étage bon marché — mais c'est une dépense, donc un clic.
+                    Trois images par insert, motion compris : chaque passage garde la porte de l'image-to-video ouverte. C'est l'étage bon marché — mais c'est une dépense, donc un clic.
                   </span>
                   {genErreur && <span style={{ color: "var(--alerte)", fontSize: 12 }}>{genErreur}</span>}
                 </div>
@@ -685,12 +694,13 @@ export default function Console({ initial }: { initial: Projet }) {
           </div>
 
           <div id="production" />
-          {plan.inserts.length > 0 && plan.inserts.every(i => i.moteur === "motion") && (
+          {plan.inserts.length > 0 && plan.inserts.every(i => moteurDe(i) === "motion") && (
             <div className="carte" style={{ marginTop: 8, marginBottom: 14, borderColor: "var(--signal)" }}>
               <span className="eyebrow" style={{ color: "var(--signal)" }}>Aucun insert B-roll dans ce plan</span>
               <p style={{ marginTop: 8, fontSize: 14, maxWidth: "70ch" }}>
-                Tous les inserts sont en motion design. Il n&apos;y a donc <b>aucune image à générer</b>, et
-                sans image, <b>aucun clip</b> : l&apos;image-to-video ne concerne que les inserts B-roll.
+                Tous les inserts sont en motion design. Aucun clip ne partira en production tant qu&apos;aucun
+                n&apos;est en B-roll. Vous pouvez <b>générer les vignettes de n&apos;importe quel insert</b> et le
+                basculer en B-roll d&apos;un clic sur son étiquette — ou changer le cadrage.
                 {(projet.cadrage.partBroll ?? 40) < 25
                   ? ` La cause est dans le cadrage : part de B-roll visée à ${projet.cadrage.partBroll} %.`
                   : " Le script a été jugé entièrement conceptuel — montez la part de B-roll visée pour forcer le modèle à chercher des scènes concrètes."}
@@ -721,8 +731,19 @@ export default function Console({ initial }: { initial: Projet }) {
                   <div>
                     <div className="rang">
                       <span className="num">{ins.n}</span>
-                      <span className={"tag" + (ins.moteur === "motion" ? " motion" : "")}>
-                        {ins.moteur === "motion" ? `Motion · ${LIBELLES[ins.forme as FormeMotion]?.nom || ins.forme}` : "B-roll"}
+                      <span style={{ display: "inline-flex", gap: 4 }}>
+                        {ins.params && (
+                          <button className={"tag" + (moteurDe(ins) === "motion" ? " motion" : "")}
+                                  title="Rendre ce passage en gabarit typographique"
+                                  onClick={e => { e.stopPropagation(); majDec(ins.n, { moteur: "motion" }); }}>
+                            Motion · {LIBELLES[ins.forme as FormeMotion]?.nom || ins.forme}
+                          </button>
+                        )}
+                        <button className={"tag" + (moteurDe(ins) === "broll" ? " motion" : "")}
+                                title="Rendre ce passage en image, puis en clip"
+                                onClick={e => { e.stopPropagation(); majDec(ins.n, { moteur: "broll" }); }}>
+                          B-roll
+                        </button>
                       </span>
                       <span className="tc">{tc(ins.entree)} · {ins.duree}s</span>
                     </div>
@@ -749,20 +770,20 @@ export default function Console({ initial }: { initial: Projet }) {
                         <figure key={i}
                                 className={"variante" + (d.variante === i ? " choisie" : "")}
                                 onClick={() => majDec(ins.n, { variante: i })}>
-                          <Vignette ins={ins} i={i} accent={projet.da.accent}
+                          <Vignette ins={{ ...ins, moteur: moteurDe(ins) }} i={i} accent={projet.da.accent}
                                     gabarit={gabaritPour(ins.forme)} vars={vars}
                                     image={d.images?.[i] ?? null} />
                           <figcaption>
                             <span className="lettre">Variante {"ABC"[i]}</span>
-                            {ins.moteur === "motion"
+                            {moteurDe(ins) === "motion"
                               ? ["Fond clair", "Fond sombre", "Variante rythmique"][i]
-                              : ins.variantes?.[i]}
+                              : promptsDe(ins)[i]}
                           </figcaption>
                         </figure>
                       ))}
                     </div>
 
-                    {ins.moteur === "broll" && (
+                    {(
                       <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
                         <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
                                 disabled={generation[ins.n] === "en-cours"}
@@ -772,7 +793,19 @@ export default function Console({ initial }: { initial: Projet }) {
                             : d.images ? "Régénérer les 3 vignettes" : "Générer les 3 vignettes"}
                         </button>
                         {generation[ins.n] === "erreur" && <span style={{ color: "var(--alerte)", fontSize: 12 }}>échec — voir le message en haut</span>}
-                        {!d.images && <span className="muet" style={{ fontSize: 12 }}>aperçus factices tant que rien n&apos;est généré</span>}
+                        {!d.images && <span className="muet" style={{ fontSize: 12 }}>
+                          {moteurDe(ins) === "motion" ? "des images sont possibles ici aussi — générez-les pour comparer, puis basculez en B-roll si elles gagnent" : "aperçus factices tant que rien n'est généré"}
+                        </span>}
+                      </div>
+                    )}
+                    {moteurDe(ins) === "broll" && (
+                      <div style={{ marginTop: 10 }}>
+                        <label className="eyebrow">Mouvement du clip</label>
+                        <textarea className="champ" style={{ marginTop: 6, minHeight: 44, fontSize: 13, resize: "vertical" }}
+                                  value={d.mouvement ?? ins.mouvement ?? ""}
+                                  placeholder="Ce qui bouge pendant le clip : le geste du sujet, la vie du décor — pas seulement la caméra."
+                                  onChange={e => majDec(ins.n, { mouvement: e.target.value })}
+                                  onClick={e => e.stopPropagation()} />
                       </div>
                     )}
                     <div className="decision">

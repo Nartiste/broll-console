@@ -23,6 +23,10 @@ export interface Decision {
   /** Les vignettes réellement générées, une par variante. Absentes tant que
    *  rien n'a été lancé : la planche montre alors un aperçu factice, marqué. */
   images?: (string | null)[];
+  /** Le moteur retenu par l'auteur, s'il diffère de la proposition du modèle. */
+  moteur?: "broll" | "motion";
+  /** Le mouvement du clip, retouché par l'auteur. */
+  mouvement?: string;
 }
 
 export type StatutProd = "attente" | "file" | "en-cours" | "pret" | "echec" | "sans-objet";
@@ -38,6 +42,7 @@ export interface ArticleProd {
   video?: string;           // URL du clip une fois prêt
   erreur?: string;
   prompt?: string;
+  mouvement?: string;       // ce qui bouge pendant le clip
   image?: string | null;    // la vignette validée, référence du clip
   html?: string;            // gabarit sur mesure rendu, autonome
 }

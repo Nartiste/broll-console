@@ -46,8 +46,12 @@ export interface Insert {
   imageabilite: number;
   abstraction: number;
   pourquoi: string;
-  variantes?: string[];             // B-roll : trois prompts
+  variantes?: string[];             // trois prompts d'image, pour tous
   params?: Record<string, any>;     // motion : les paramètres du gabarit
+  /** Ce qui bouge pendant le clip : le geste du sujet, la vie du décor. Une
+   *  image animée par un simple zoom n'est pas une vidéo — c'est ce champ
+   *  qui fait la différence à la génération. */
+  mouvement?: string;
 }
 
 export interface Plan {
@@ -285,6 +289,7 @@ export interface Choix {
   pourquoi: string;
   params?: Record<string, any>;
   variantes?: string[];
+  mouvement?: string;
 }
 
 /** Les blocs de souffle du script, numérotés — l'unité que les deux paliers notent. */
@@ -369,6 +374,7 @@ export function composer(
     pourquoi: c.pourquoi,
     variantes: c.variantes,
     params: c.params,
+    mouvement: c.mouvement,
   }));
 
   const alertes: Plan["alertes"] = [];
@@ -414,7 +420,8 @@ export function choixDeterministes(
         abstraction: m.abstraction,
         pourquoi: a.pourquoi,
         params: a.params,
-        variantes: a.moteur === "broll" ? prompts(b, registre) : undefined,
+        variantes: prompts(b, registre),   // pour tous : l'image reste possible
+        mouvement: `Le sujet accomplit, en continu et de façon visible, ce que dit le passage : « ${(b.lignes[0] || "").replace(/[.?!]$/, "")} ». Le décor vit — lumière, particules, écran — et la caméra avance légèrement, sans porter seule le mouvement.`,
       };
     });
 }

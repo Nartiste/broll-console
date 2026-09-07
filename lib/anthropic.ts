@@ -37,7 +37,8 @@ const Retenu = z.object({
   abstraction: z.number().int().min(0).max(99).describe("saturation en notions qui ne se filment pas"),
   pourquoi: z.string().describe("une phrase, en français, qui justifie le choix"),
 
-  sujet: z.string().nullable().describe("broll : le sujet visuel en une proposition"),
+  sujet: z.string().describe("pour TOUS les inserts, motion compris : la scène concrète et filmable qui illustre ce passage, en une proposition — l'auteur peut préférer une image à un gabarit"),
+  mouvement: z.string().describe("pour TOUS : ce qui BOUGE pendant le clip — le geste du sujet, ce que font les objets, la vie du décor — une phrase au présent, concrète ; jamais seulement un mouvement de caméra"),
   titre: z.string().nullable(),
   items: z.array(z.string()).nullable().describe("liste-3, liste-5, pyramide"),
   mot: z.string().nullable().describe("mot-choc : la formule, en capitales"),
@@ -82,6 +83,8 @@ Règles de fond :
 1. **Les libellés sont réécrits, jamais découpés.** Tu peux reformuler pour tenir en trois mots ; tu ne dois pas couper une phrase en plein milieu.
 2. **Sois sélectif sur le mérite, pas sur le moteur.** Note bas les passages de transition. Mais la vidéo est en plan fixe : le B-roll est la seule variation visuelle, et une part visée de B-roll t'est donnée. Approche-toi de cette part — en cherchant, dans les passages abstraits, la scène concrète qui les incarne (un personnage, un geste, un lieu) plutôt qu'en les envoyant tous en gabarit. C'est une cible, pas un quota : si le script ne s'y prête vraiment pas, dis-le dans « pourquoi ».
 3. **Ne rends aucun timecode ni aucune durée** — ils sont calculés ailleurs.
+6. **Le mouvement est une action, pas un zoom.** Pour chaque insert, « mouvement » décrit ce qui se passe à l'image pendant le clip : le sujet fait quelque chose de visible et continu (il se lève, tourne la tête, tape, verse, marche), les objets réagissent, le décor vit. Une phrase qui ne décrit qu'un mouvement de caméra est refusée.
+5. **Un sujet visuel pour chaque insert, motion compris.** Le moteur que tu choisis est une proposition ; l'auteur peut préférer, pour n'importe quel passage, une image générée à un gabarit. Donne donc toujours « sujet » : la scène concrète — un personnage, un geste, un lieu, un objet — qui incarnerait ce passage à l'image.
 4. Tout en français.`;
 
 /** Traduit la sortie plate du modèle en paramètres de gabarit. */
@@ -160,9 +163,9 @@ export async function analyserAvecClaude(
       abstraction: r.abstraction,
       pourquoi: r.pourquoi,
       params: versParams(r),
-      variantes: r.moteur === "broll"
-        ? troisPrompts(r.sujet || blocs[r.bloc].texte, registre)
-        : undefined,
+      // Des vignettes pour tous : le moteur est une proposition, l'image reste possible.
+      variantes: troisPrompts(r.sujet || blocs[r.bloc].texte, registre),
+      mouvement: r.mouvement,
     }));
 
   // Le rythme reste déterministe : le modèle a jugé le fond, pas l'allocation.
