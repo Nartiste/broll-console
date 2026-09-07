@@ -138,33 +138,60 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     }
   }
 
+  /* Le dossier est fait pour Premiere, pas pour l'archivage : ce qu'on pose
+     sur la timeline est au premier niveau, numéroté dans l'ordre du script,
+     un seul fichier par insert. Le reste (image fixe, version plein cadre,
+     séquence PNG) est rangé à part, hors du chemin. */
   async function telechargerDossier() {
     if (!prod) return;
     setZip("en-cours");
     try {
       const JSZip = (await import("jszip")).default;
       const z = new JSZip();
-      const lignes: string[] = [];
+      const timeline: string[] = [];
+      const timecode = (n: number) => { const i = plan.inserts.find(x => x.n === n); if (!i) return "     "; const t = i.entree; return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`; };
       for (const a of prod.articles) {
         if (a.statut === "pret" && a.video) {
           const r = await fetch(`/api/production/fichier?url=${encodeURIComponent(a.video)}&nom=${a.fichier}.mp4`);
-          if (r.ok) { z.file(`${a.fichier}.mp4`, await r.blob()); lignes.push(`${a.fichier}.mp4  ·  B-roll  ·  ${a.duree}s`); }
+          if (r.ok) {
+            z.file(`01-TIMELINE/${a.fichier}.mp4`, await r.blob());
+            timeline.push(`${timecode(a.n)}  ${a.fichier}.mp4  ·  B-roll ${a.duree} s  ·  piste V2, en coupe sur le plan`);
+          }
         } else if (a.html) {
-          // Un HTML ne se pose pas sur une timeline : on le fait rendre en .mov à
-          // canal alpha (et en séquence PNG), 24 i/s, rangés dans le dossier.
           setEtapeZip(`rendu de ${a.fichier}…`);
           const r = await fetch("/api/rendu", { method: "POST", headers: { "Content-Type": "application/json" },
                                  body: JSON.stringify({ html: a.html, nom: a.fichier, fps: 24, duree: a.dureeAnim || DUREE_ANIMATION }) });
-          if (r.ok) {
-            const sous = await JSZip.loadAsync(await r.blob());
-            await Promise.all(Object.values(sous.files).map(async f => { if (!f.dir) z.file(f.name, await f.async("blob")); }));
-            lignes.push(`${a.fichier}.mov  ·  motion  ·  vidéo ${a.dureeAnim || DUREE_ANIMATION} s à fond transparent (+ séquence PNG dans ${a.fichier}/)  ·  ${a.fichier}.png = image fixe`);
-          } else {
-            z.file(`${a.fichier}.html`, a.html); lignes.push(`${a.fichier}.html  ·  motion  ·  rendu PNG indisponible, HTML fourni`);
+          if (!r.ok) {
+            z.file(`03-SOURCES/${a.fichier}/${a.fichier}.html`, a.html);
+            timeline.push(`${timecode(a.n)}  ${a.fichier}  ·  motion  ·  RENDU IMPOSSIBLE, HTML dans 03-SOURCES`);
+            continue;
           }
+          const sous = await JSZip.loadAsync(await r.blob());
+          const noms = Object.keys(sous.files);
+          const alpha = noms.includes(`${a.fichier}_alpha.mov`);
+          const movPose = alpha ? `${a.fichier}_alpha.mov` : `${a.fichier}.mov`;
+          const pngPose = alpha ? `${a.fichier}_alpha.png` : `${a.fichier}.png`;
+          let pose = false;
+          await Promise.all(Object.values(sous.files).map(async f => {
+            if (f.dir) return;
+            const blob = await f.async("blob");
+            if (f.name === movPose) { z.file(`01-TIMELINE/${a.fichier}.mov`, blob); pose = true; }
+            else if (f.name === pngPose) z.file(`02-IMAGES-FIXES/${a.fichier}.png`, blob);
+            else if (f.name.endsWith("_LISEZMOI.txt")) return;   // remplacé par le LISEZMOI global
+            else z.file(`03-SOURCES/${f.name}`, blob);
+          }));
+          timeline.push(`${timecode(a.n)}  ${a.fichier}.${pose ? "mov" : "png"}  ·  motion ${a.dureeAnim || DUREE_ANIMATION} s  ·  piste V3, PAR-DESSUS le plan (fond transparent)`);
         }
       }
-      z.file("00-ORDRE.txt", `${projet.titre}\n\nFichiers en ordre de script — descendez le dossier en descendant la timeline.\n\n${lignes.join("\n")}\n`);
+      z.file("00-LISEZMOI.txt",
+        `${projet.titre}\n${"=".repeat(projet.titre.length)}\n\n` +
+        `01-TIMELINE/        Ce que vous posez sur la timeline. Un fichier par insert, numéroté dans l'ordre du script.\n` +
+        `                    .mp4 = B-roll généré, à poser en coupe (V2). .mov = motion à fond transparent, à poser par-dessus (V3).\n` +
+        `02-IMAGES-FIXES/    L'état final de chaque motion, en PNG transparent : à poser juste après le .mov pour le tenir plus longtemps.\n` +
+        `03-SOURCES/         Pour aller plus loin : version plein cadre (avec fond), séquences PNG image par image, HTML.\n\n` +
+        `Premiere : Fichier → Importer → sélectionnez tout 01-TIMELINE. Les .mov ont un canal alpha direct, rien à régler.\n` +
+        `Timecode = début de l'insert dans le script (à la vitesse de lecture estimée). Ajustez à l'oreille.\n\n` +
+        `ORDRE DE MONTAGE\n${"-".repeat(16)}\n${timeline.join("\n")}\n`);
       const blob = await z.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob); a.download = `${slug(projet.titre)}-broll.zip`; a.click();
@@ -251,7 +278,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
             <button className="btn" disabled={zip === "en-cours" || (prets === 0 && !prod.articles.some(a => a.html))} onClick={telechargerDossier}>
               {zip === "en-cours" ? (etapeZip || "Assemblage du dossier…") : "Télécharger le dossier"}
             </button>
-            <span className="muet" style={{ fontSize: 12.5 }}>Clips en MP4, gabarits en .mov à fond transparent (24 i/s, plus la séquence PNG), numérotés en ordre de script, avec 00-ORDRE.txt. Comptez jusqu'à trois minutes par gabarit.</span>
+            <span className="muet" style={{ fontSize: 12.5 }}>01-TIMELINE (un fichier par insert, dans l'ordre), 02-IMAGES-FIXES, 03-SOURCES, et un LISEZMOI avec l'ordre de montage. Comptez jusqu'à trois minutes par gabarit.</span>
             <button className="btn fantome" style={{ marginLeft: "auto" }} onClick={() => { if (confirm("Oublier cette production et repartir du tri ?")) onMaj(undefined as any); }}>
               Nouvelle production
             </button>
