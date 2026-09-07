@@ -61,7 +61,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       return g
         ? { ...base, statut: "pret" as const, dureeAnim: dureeDe(g),
             html: documentGabarit(g, i.params || {}, vars, false, { anime: true, transparent: true }) }
-        : { ...base, statut: "sans-objet" as const, erreur: "Gabarit intégré : pas encore de rendu. Déposez un composant à l'étape 2 pour cette forme, ou basculez l'insert en B-roll." };
+        : { ...base, statut: "sans-objet" as const, erreur: "Forme inconnue : aucun gabarit ne sait la porter." };
     });
   }, [plan, dec, vars, gabaritPour]);
 
@@ -119,6 +119,24 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     const t = setInterval(tick, 10_000);
     return () => { arret = true; clearInterval(t); };
   }, [prod?.lancee, prod?.articles.map(a => a.statut).join(","), prod?.articles.length]);
+
+  /* Le rendu d'un gabarit prend jusqu'à trois minutes sur le serveur : le
+     bouton le dit, plutôt que de laisser croire qu'il ne fait rien. */
+  const [rendu, setRendu] = useState<Record<string, "en-cours" | "erreur" | undefined>>({});
+  async function rendreArticle(a: ArticleProd) {
+    if (!a.html) return;
+    setRendu(q => ({ ...q, [a.fichier]: "en-cours" }));
+    try {
+      const r = await fetch("/api/rendu", { method: "POST", headers: { "Content-Type": "application/json" },
+                             body: JSON.stringify({ html: a.html, nom: a.fichier, fps: 24, duree: a.dureeAnim || DUREE_ANIMATION }) });
+      if (!r.ok) throw new Error(String(r.status));
+      const u = URL.createObjectURL(await r.blob()); const l = document.createElement("a");
+      l.href = u; l.download = `${a.fichier}.zip`; l.click(); setTimeout(() => URL.revokeObjectURL(u), 10_000);
+      setRendu(q => ({ ...q, [a.fichier]: undefined }));
+    } catch {
+      setRendu(q => ({ ...q, [a.fichier]: "erreur" }));
+    }
+  }
 
   async function telechargerDossier() {
     if (!prod) return;
@@ -179,8 +197,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
               </select>
             </div>
             <div className="l"><span>Ordre de grandeur</span><b>≈ {cout.toFixed(2)} $</b></div>
-            <div className="l"><span>Gabarits sur mesure livrés en HTML</span><b>{candidats.filter(c => c.html).length}</b></div>
-            <div className="l"><span>Gabarits intégrés (pas de fichier encore)</span><b>{candidats.filter(c => c.statut === "sans-objet").length}</b></div>
+            <div className="l"><span>Gabarits motion, rendus en .mov à fond transparent</span><b>{candidats.filter(c => c.html).length}</b></div>
           </div>
           {sansImage > 0 && (
             <p className="pourquoi" style={{ color: "var(--signal)" }}>
@@ -212,7 +229,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                 <div>
                   <div className="mono" style={{ fontSize: 12.5 }}>{a.fichier}.{a.moteur === "broll" ? "mp4" : "html"}</div>
                   <div className="muet" style={{ fontSize: 11.5, marginTop: 2 }}>
-                    {a.moteur === "broll" ? `B-roll · ${a.duree}s${a.image ? " · depuis la vignette validée" : " · depuis le prompt seul"}` : `Motion · ${a.forme}${a.html ? " · séquence PNG alpha dans le dossier" : ""}`}
+                    {a.moteur === "broll" ? `B-roll · ${a.duree}s${a.image ? " · depuis la vignette validée" : " · depuis le prompt seul"}` : `Motion · ${a.forme}${a.html ? ` · ${a.dureeAnim || DUREE_ANIMATION} s · .mov à fond transparent` : ""}`}
                     {a.erreur && <span style={{ color: a.statut === "echec" ? "var(--alerte)" : "var(--encre-3)" }}> — {a.erreur}</span>}
                   </div>
                 </div>
@@ -222,13 +239,10 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                   {a.video && <a className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
                                  href={`/api/production/fichier?url=${encodeURIComponent(a.video)}&nom=${a.fichier}.mp4`}>Télécharger</a>}
                   {a.html && <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
-                                onClick={async () => {
-                                  const r = await fetch("/api/rendu", { method: "POST", headers: { "Content-Type": "application/json" },
-                                                         body: JSON.stringify({ html: a.html, nom: a.fichier, fps: 24, duree: a.dureeAnim || DUREE_ANIMATION }) });
-                                  if (!r.ok) { alert("Rendu indisponible pour l'instant."); return; }
-                                  const u = URL.createObjectURL(await r.blob()); const l = document.createElement("a");
-                                  l.href = u; l.download = `${a.fichier}.zip`; l.click(); setTimeout(() => URL.revokeObjectURL(u), 10_000);
-                                }}>Fichier vidéo (.mov)</button>}
+                                disabled={rendu[a.fichier] === "en-cours"}
+                                onClick={() => rendreArticle(a)}>
+                    {rendu[a.fichier] === "en-cours" ? "Rendu en cours… (jusqu'à 3 min)" : rendu[a.fichier] === "erreur" ? "Réessayer le rendu" : "Fichier vidéo (.mov)"}
+                  </button>}
                 </div>
               </div>
             ))}
@@ -237,7 +251,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
             <button className="btn" disabled={zip === "en-cours" || (prets === 0 && !prod.articles.some(a => a.html))} onClick={telechargerDossier}>
               {zip === "en-cours" ? (etapeZip || "Assemblage du dossier…") : "Télécharger le dossier"}
             </button>
-            <span className="muet" style={{ fontSize: 12.5 }}>Clips en MP4, gabarits en séquences PNG à fond transparent (24 i/s), numérotés en ordre de script, avec 00-ORDRE.txt. Premiere importe une séquence PNG comme une vidéo.</span>
+            <span className="muet" style={{ fontSize: 12.5 }}>Clips en MP4, gabarits en .mov à fond transparent (24 i/s, plus la séquence PNG), numérotés en ordre de script, avec 00-ORDRE.txt. Comptez jusqu'à trois minutes par gabarit.</span>
             <button className="btn fantome" style={{ marginLeft: "auto" }} onClick={() => { if (confirm("Oublier cette production et repartir du tri ?")) onMaj(undefined as any); }}>
               Nouvelle production
             </button>

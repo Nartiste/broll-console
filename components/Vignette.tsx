@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type { Insert } from "@/lib/analyse";
 import type { Gabarit } from "@/lib/gabarits";
 import GabaritApercu from "./GabaritApercu";
+import { integre } from "@/lib/gabarits-integres";
 
 /**
  * Deux natures de vignettes, et la distinction est honnête à l'écran.
@@ -197,8 +198,8 @@ export default function Vignette({ ins, i, accent, gabarit, vars, image }: {
   return (
     <div className="vignette">
       {ins.moteur === "motion" ? (
-        gabarit && vars
-          ? <GabaritApercu gabarit={gabarit} params={ins.params || {}} vars={vars} sombre={i === 1} anime />
+        vars && (gabarit || integre(ins.forme))
+          ? <GabaritApercu gabarit={(gabarit || integre(ins.forme))!} params={ins.params || {}} vars={vars} sombre={i === 1} anime />
           : <Comp forme={ins.forme} params={ins.params} i={i} />
       ) : image ? (
         <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />

@@ -8,6 +8,7 @@ import { EXEMPLES, LIBELLES, SLOTS, type FormeMotion, type Gabarit, dureeDe } fr
 import { troisPrompts } from "@/lib/images";
 import { Comp } from "./Vignette";
 import GabaritApercu from "./GabaritApercu";
+import { integre } from "@/lib/gabarits-integres";
 
 /** La consigne d'un clic : un gabarit sans mouvement propre en reçoit un. */
 const CONSIGNE_MOUVEMENT =
@@ -57,7 +58,8 @@ export default function Console({ initial }: { initial: Projet }) {
   const [gabConsigne, setGabConsigne] = useState<Record<string, string>>({});
   const gabInput = useRef<HTMLInputElement>(null);
   const vars = useMemo(() => variablesBrutes(projet.da), [projet.da]);
-  const gabaritPour = (forme: string) => projet.da.gabarits?.find(g => g.forme === forme);
+  /** Le gabarit d'une forme : celui déposé par l'auteur, sinon l'intégré — il y en a toujours un. */
+  const gabaritPour = (forme: string) => projet.da.gabarits?.find(g => g.forme === forme) || integre(forme);
 
   /* Les vignettes ne se génèrent jamais toutes seules : c'est une dépense,
      petite mais réelle, donc un geste explicite — par insert, ou pour tous. */
