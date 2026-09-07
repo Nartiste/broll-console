@@ -4,10 +4,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { composer, analyser, CADRAGE_DEFAUT } from "@/lib/analyse";
 import { derive, variables, variablesBrutes, type DA } from "@/lib/da";
-import { EXEMPLES, LIBELLES, SLOTS, type FormeMotion, type Gabarit } from "@/lib/gabarits";
+import { EXEMPLES, LIBELLES, SLOTS, type FormeMotion, type Gabarit, dureeDe } from "@/lib/gabarits";
 import { troisPrompts } from "@/lib/images";
 import { Comp } from "./Vignette";
 import GabaritApercu from "./GabaritApercu";
+
+/** La consigne d'un clic : un gabarit sans mouvement propre en reçoit un. */
+const CONSIGNE_MOUVEMENT =
+  "Donne du mouvement à ce composant sans changer sa structure ni son style : une entrée franche, puis un mouvement propre " +
+  "qui raconte le contenu — l'état actif passe d'un élément au suivant (01, puis 02, puis 03), les chiffres montent, " +
+  "les barres poussent, le second volet répond au premier. Amplitude nette, état final tenu.";
 import Production from "./Production";
 import { majProjet, type Decision, type Etat, type Projet } from "@/lib/store";
 import Vignette from "./Vignette";
@@ -44,6 +50,7 @@ export default function Console({ initial }: { initial: Projet }) {
   const [charteErreur, setCharteErreur] = useState<string | null>(null);
   const refsInput = useRef<HTMLInputElement>(null);
   const [consigne, setConsigne] = useState("");
+  const [rejeu, setRejeu] = useState<Record<string, number>>({});
   const [gabEtat, setGabEtat] = useState<"repos" | "en-cours" | "erreur">("repos");
   const [gabErreur, setGabErreur] = useState<string | null>(null);
   const [gabForme, setGabForme] = useState<FormeMotion | "">("");
@@ -586,8 +593,13 @@ export default function Console({ initial }: { initial: Projet }) {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14, marginTop: 18 }}>
                 {projet.da.gabarits.map(g => (
                   <div key={g.id} style={{ border: "1px solid var(--trait)", borderRadius: 16, overflow: "hidden", background: "var(--surface-2)" }}>
-                    <div className="vignette">
-                      <GabaritApercu gabarit={g} params={EXEMPLES[g.forme]} vars={vars} />
+                    <div className="vignette" style={{ position: "relative" }}>
+                      <GabaritApercu key={rejeu[g.id] || 0} gabarit={g} params={EXEMPLES[g.forme]} vars={vars} anime />
+                      <button className="pilule" title="Rejouer le mouvement"
+                              style={{ position: "absolute", right: 8, bottom: 8, fontSize: 11 }}
+                              onClick={() => setRejeu(q => ({ ...q, [g.id]: (q[g.id] || 0) + 1 }))}>
+                        ▶ Rejouer · {dureeDe(g)} s
+                      </button>
                     </div>
                     <div style={{ padding: "10px 12px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -606,6 +618,14 @@ export default function Console({ initial }: { initial: Projet }) {
                                 onClick={() => extraireGabarit([], { consigne: gabConsigne[g.id], actuel: g })}>
                           Réécrire
                         </button>
+                        {!g.animation?.trim() && (
+                          <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
+                                  disabled={gabEtat === "en-cours"}
+                                  title="Ce gabarit n'a que l'entrée générique : lui donner son propre mouvement"
+                                  onClick={() => extraireGabarit([], { consigne: CONSIGNE_MOUVEMENT, actuel: g })}>
+                            Donner du mouvement
+                          </button>
+                        )}
                         <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5, marginLeft: "auto" }}
                                 onClick={() => majDa({ gabarits: (projet.da.gabarits || []).filter(x => x.id !== g.id) })}>
                           Retirer

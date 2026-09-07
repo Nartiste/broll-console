@@ -292,6 +292,8 @@ const GabaritSchema = z.object({
   description: z.string().describe("deux phrases : ce que la référence montre, et comment le gabarit la transpose"),
   html: z.string().describe("le HTML du composant, à l'intérieur de .g, avec les slots {{…}} de la forme"),
   css: z.string().describe("le CSS, chaque règle préfixée par .g"),
+  animation: z.string().describe("le CSS du mouvement : des @keyframes nommés g-… et des règles .g … { animation: … } — l'entrée du composant, puis son mouvement propre ; aucune boucle infinite"),
+  duree: z.number().describe("durée totale du mouvement en secondes, état final compris — entre 2 et 6"),
 });
 
 const CONSIGNE_GABARIT = `Tu transposes un composant graphique — montré sur une capture d'écran — en gabarit HTML/CSS réutilisable.
@@ -305,7 +307,8 @@ Contraintes techniques, toutes obligatoires :
 4. **Aucun script, aucune image externe, aucune URL, aucun @import, aucune police web.** Des formes CSS (dégradés, ombres, bordures, pseudo-éléments) reproduisent ce que la référence montre.
 5. **Les slots sont exactement ceux de la forme demandée** — ni plus, ni moins. Syntaxe : {{cle}}, {{a.v}}, et pour les listes {{#items}}…{{.}}…{{/items}} (chaque élément est {{.}}, son numéro {{index}}) ou {{#items}}…{{label}} {{pct}}…{{/items}} pour des objets.
 6. Le composant occupe le canevas de façon composée — centré, avec des marges — et ne déborde jamais.
-7. Tout en français.`;
+7. **Le composant bouge, et son mouvement raconte le contenu.** Dans le champ animation, en CSS pur (@keyframes nommés g-…, règles préfixées .g, animation-fill-mode both, jamais infinite) : d'abord une entrée franche et courte (0,3–0,6 s : le cadre se pose, les éléments arrivent en cascade, décalés de 0,1 à 0,15 s), puis un mouvement PROPRE qui dure — c'est lui qu'on regarde. Des étapes ou une liste : l'état actif (pilule, surbrillance, couleur d'accent) PASSE de l'élément 1 au 2 puis au 3, chacun tenu environ 0,8 s, et ne revient pas en arrière. Un chiffre : il grossit ou se révèle avec poids. Des barres : elles poussent depuis zéro, l'une après l'autre. Avant / après ou opposition : le second volet arrive après le premier, en contraste. Un mot-choc : il claque (échelle, contraste), puis respire à peine. Tout mouvement se termine sur un état final lisible et stable, tenu au moins 0,5 s. Amplitude nette (déplacements en vw, échelles 0,9→1, opacités), courbes cubic-bezier(.2,.9,.2,1) — pas de tremblements, pas de rebonds enfantins. Le champ duree = durée totale, entre 2 et 6 s.
+8. Tout en français.`;
 
 export async function extraireGabarit(
   refs: Reference[],
@@ -358,6 +361,9 @@ export async function extraireGabarit(
                      .replace(/<\s*(script|iframe|object|embed|link|meta)[^>]*\/?>/gi, "")
                      .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
                      .replace(/(src|href)\s*=\s*("[^"]*"|'[^']*')/gi, "");
-  const css = g.css.replace(/@import[^;]*;/gi, "").replace(/url\([^)]*\)/gi, "none").replace(/expression\([^)]*\)/gi, "");
-  return { nom: g.nom, forme: g.forme, description: g.description, html, css };
+  const purger = (c: string) => c.replace(/@import[^;]*;/gi, "").replace(/url\([^)]*\)/gi, "none").replace(/expression\([^)]*\)/gi, "");
+  const css = purger(g.css);
+  const animation = purger(g.animation || "").replace(/\binfinite\b/gi, "1");
+  const duree = Math.max(1.5, Math.min(8, Number(g.duree) || 2.5));
+  return { nom: g.nom, forme: g.forme, description: g.description, html, css, animation, duree };
 }

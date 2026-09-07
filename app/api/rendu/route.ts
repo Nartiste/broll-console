@@ -13,7 +13,8 @@ export const dynamic = "force-dynamic";
  * Rendu d'un gabarit en fichiers montables.
  *
  * Un HTML ne se pose pas sur une timeline. Ici, un Chromium headless charge
- * le gabarit animé, le fige à chaque instant t (variable --t) et le capture
+ * le gabarit animé, le fige à chaque instant t (toutes les animations de la
+ * page sont mises en pause et placées à t par l'API Web Animations) et le capture
  * en PNG avec transparence — une séquence d'images que Premiere, Resolve ou
  * After Effects importent comme une vidéo à canal alpha. Plus une image fixe
  * 1920×1080. Le tout dans un zip.
@@ -75,6 +76,11 @@ export async function POST(req: Request) {
     const page = await b.newPage();
     await page.setContent(html, { waitUntil: "load" });
     await page.evaluate(() => (document as any).fonts?.ready);
+    // Figer à t : chaque animation CSS de la page — celles de l'entrée générique
+    // comme celles qu'un gabarit apporte — est mise en pause et placée à t.
+    const figer = (t: number) => page.evaluate((ms: number) => {
+      for (const a of (document as any).getAnimations({ subtree: true }) as Animation[]) { a.pause(); a.currentTime = ms; }
+    }, Math.round(t * 1000));
 
     const zip = new JSZip();
     let avecMov = false;
@@ -83,7 +89,7 @@ export async function POST(req: Request) {
       const trames: Buffer[] = [];
       for (let i = 0; i < images; i++) {
         const t = i / Number(fps);
-        await page.evaluate((t: number) => document.documentElement.style.setProperty("--t", `${t}s`), t);
+        await figer(t);
         const png = Buffer.from(await page.screenshot({ type: "png", omitBackground: true }));
         trames.push(png);
         dossier.file(`${base}${suffixe}_${String(i + 1).padStart(4, "0")}.png`, png);
@@ -91,7 +97,7 @@ export async function POST(req: Request) {
       const mov = await encoderMov(trames, Number(fps));
       if (mov) { zip.file(`${base}${suffixe}.mov`, mov); avecMov = true; }
       if (fixe) {
-        await page.evaluate((t: number) => document.documentElement.style.setProperty("--t", `${t}s`), Number(duree) + 1);
+        await figer(Number(duree) + 1);
         zip.file(`${base}${suffixe}.png`, await page.screenshot({ type: "png", omitBackground: true }));
       }
     };

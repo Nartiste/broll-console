@@ -12,9 +12,9 @@ import { document as documentGabarit, type Gabarit } from "@/lib/gabarits";
  * 1 % de la largeur de l'iframe, donc le composant se met à l'échelle seul.
  */
 export default function GabaritApercu({
-  gabarit, params, vars, sombre = false,
-}: { gabarit: Gabarit; params: Record<string, any>; vars: Record<string, string>; sombre?: boolean }) {
-  const doc = useMemo(() => documentGabarit(gabarit, params, vars, sombre), [gabarit, params, vars, sombre]);
+  gabarit, params, vars, sombre = false, anime = false,
+}: { gabarit: Gabarit; params: Record<string, any>; vars: Record<string, string>; sombre?: boolean; anime?: boolean }) {
+  const doc = useMemo(() => documentGabarit(gabarit, params, vars, sombre, { anime }), [gabarit, params, vars, sombre, anime]);
   return (
     <iframe
       title={gabarit.nom}

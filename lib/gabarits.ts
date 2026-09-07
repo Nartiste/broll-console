@@ -22,6 +22,11 @@ export interface Gabarit {
   description: string;
   html: string;      // avec des slots {{…}}
   css: string;       // styles scopés sous .g
+  /** Le mouvement propre du composant : @keyframes g-… et règles .g … {animation}.
+   *  Absent, le gabarit reçoit l'entrée générique (cadre puis cascade). */
+  animation?: string;
+  /** Durée totale de l'animation, état final compris (s). */
+  duree?: number;
   source?: string;   // nom du fichier de référence
   cree: number;
 }
@@ -98,40 +103,42 @@ export function rendre(html: string, params: Record<string, any>): string {
 /** Le document complet à afficher dans une iframe isolée. Les variables de
  *  charte sont injectées ici : elles ne traversent pas la frontière d'une iframe. */
 /**
- * L'entrée animée d'un gabarit, en CSS pur : le cadre se pose, puis chaque
- * élément de premier niveau monte et apparaît, l'un après l'autre. Tout est
- * piloté par une seule variable, --t : l'animation est mise en pause et
- * décalée de -t secondes, ce qui la FIGE exactement à l'instant t. Un rendu
- * image par image devient une suite de captures déterministes.
+ * L'entrée animée générique d'un gabarit, en CSS pur : le cadre se pose, puis
+ * chaque élément monte et apparaît, l'un après l'autre. Un gabarit sur mesure
+ * peut apporter son propre mouvement (`animation`) : il remplace celle-ci.
+ *
+ * Le rendu image par image ne dépend pas de ces règles : il fige la page à
+ * l'instant t par l'API Web Animations, quelles que soient les animations
+ * présentes. Ici, tout joue naturellement dans l'aperçu.
  */
 export const DUREE_ANIMATION = 2.5;
+export const dureeDe = (g?: Pick<Gabarit, "duree"> | null) => g?.duree && g.duree > 0 ? g.duree : DUREE_ANIMATION;
 
 const ANIMATION = `
-:root{--t:0s}
-.g{animation:g-cadre .55s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(-1 * var(--t));animation-play-state:paused}
-.g > *{animation:g-elem .6s cubic-bezier(.2,.8,.2,1) both;animation-play-state:paused}
-.g > *:nth-child(1){animation-delay:calc(.25s - var(--t))}
-.g > *:nth-child(2){animation-delay:calc(.35s - var(--t))}
-.g > *:nth-child(3){animation-delay:calc(.45s - var(--t))}
-.g > *:nth-child(4){animation-delay:calc(.55s - var(--t))}
-.g > *:nth-child(5){animation-delay:calc(.65s - var(--t))}
-.g > *:nth-child(6){animation-delay:calc(.75s - var(--t))}
-.g > *:nth-child(n+7){animation-delay:calc(.85s - var(--t))}
-.g > * > *{animation:g-elem .5s cubic-bezier(.2,.8,.2,1) both;animation-play-state:paused}
-.g > * > *:nth-child(1){animation-delay:calc(.5s - var(--t))}
-.g > * > *:nth-child(2){animation-delay:calc(.6s - var(--t))}
-.g > * > *:nth-child(3){animation-delay:calc(.7s - var(--t))}
-.g > * > *:nth-child(4){animation-delay:calc(.8s - var(--t))}
-.g > * > *:nth-child(5){animation-delay:calc(.9s - var(--t))}
-.g > * > *:nth-child(n+6){animation-delay:calc(1s - var(--t))}
-.g > * > * > *{animation:g-elem .45s cubic-bezier(.2,.8,.2,1) both;animation-play-state:paused}
-.g > * > * > *:nth-child(1){animation-delay:calc(.7s - var(--t))}
-.g > * > * > *:nth-child(2){animation-delay:calc(.8s - var(--t))}
-.g > * > * > *:nth-child(3){animation-delay:calc(.9s - var(--t))}
-.g > * > * > *:nth-child(4){animation-delay:calc(1s - var(--t))}
-.g > * > * > *:nth-child(n+5){animation-delay:calc(1.1s - var(--t))}
-@keyframes g-cadre{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
-@keyframes g-elem{from{opacity:0;transform:translateY(1.2vw)}to{opacity:1;transform:none}}
+.g{animation:g-cadre .6s cubic-bezier(.2,.9,.2,1) both}
+.g > *{animation:g-elem .65s cubic-bezier(.2,.9,.2,1) both}
+.g > *:nth-child(1){animation-delay:.25s}
+.g > *:nth-child(2){animation-delay:.38s}
+.g > *:nth-child(3){animation-delay:.51s}
+.g > *:nth-child(4){animation-delay:.64s}
+.g > *:nth-child(5){animation-delay:.77s}
+.g > *:nth-child(6){animation-delay:.9s}
+.g > *:nth-child(n+7){animation-delay:1.03s}
+.g > * > *{animation:g-elem .55s cubic-bezier(.2,.9,.2,1) both}
+.g > * > *:nth-child(1){animation-delay:.55s}
+.g > * > *:nth-child(2){animation-delay:.68s}
+.g > * > *:nth-child(3){animation-delay:.81s}
+.g > * > *:nth-child(4){animation-delay:.94s}
+.g > * > *:nth-child(5){animation-delay:1.07s}
+.g > * > *:nth-child(n+6){animation-delay:1.2s}
+.g > * > * > *{animation:g-elem .5s cubic-bezier(.2,.9,.2,1) both}
+.g > * > * > *:nth-child(1){animation-delay:.8s}
+.g > * > * > *:nth-child(2){animation-delay:.93s}
+.g > * > * > *:nth-child(3){animation-delay:1.06s}
+.g > * > * > *:nth-child(4){animation-delay:1.19s}
+.g > * > * > *:nth-child(n+5){animation-delay:1.32s}
+@keyframes g-cadre{from{opacity:0;transform:scale(.9) translateY(2vw)}to{opacity:1;transform:none}}
+@keyframes g-elem{from{opacity:0;transform:translateY(2.5vw) scale(.94)}to{opacity:1;transform:none}}
 `;
 
 export function document(
@@ -153,7 +160,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:${fond};col
 *{box-sizing:border-box}
 .g{width:100%;height:100%;position:relative}
 ${g.css}
-${opts.anime ? ANIMATION : ""}
+${opts.anime ? (g.animation?.trim() ? g.animation : ANIMATION) : ""}
 ${opts.sansFond ? ".g{background:transparent!important;box-shadow:none!important}" : ""}
 </style><div class="g">${rendre(g.html, params)}</div>`;
 }

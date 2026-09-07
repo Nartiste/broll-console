@@ -45,6 +45,7 @@ export interface ArticleProd {
   mouvement?: string;       // ce qui bouge pendant le clip
   image?: string | null;    // la vignette validée, référence du clip
   html?: string;            // gabarit sur mesure rendu, autonome
+  dureeAnim?: number;       // durée du mouvement du gabarit (s)
 }
 
 export interface Production {

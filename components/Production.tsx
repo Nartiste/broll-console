@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Plan } from "@/lib/analyse";
-import { DUREE_ANIMATION, document as documentGabarit, type Gabarit } from "@/lib/gabarits";
+import { DUREE_ANIMATION, dureeDe, document as documentGabarit, type Gabarit } from "@/lib/gabarits";
 import { TARIFS } from "@/lib/tarifs";
 import type { ArticleProd, Decision, Production as Prod, Projet } from "@/lib/store";
 
@@ -59,7 +59,8 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       // Le gabarit part animé et sur fond transparent : c'est ce que le
       // rendu fige image par image, et ce que le montage superpose au plan.
       return g
-        ? { ...base, statut: "pret" as const, html: documentGabarit(g, i.params || {}, vars, false, { anime: true, transparent: true }) }
+        ? { ...base, statut: "pret" as const, dureeAnim: dureeDe(g),
+            html: documentGabarit(g, i.params || {}, vars, false, { anime: true, transparent: true }) }
         : { ...base, statut: "sans-objet" as const, erreur: "Gabarit intégré : pas encore de rendu. Déposez un composant à l'étape 2 pour cette forme, ou basculez l'insert en B-roll." };
     });
   }, [plan, dec, vars, gabaritPour]);
@@ -135,11 +136,11 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
           // canal alpha (et en séquence PNG), 24 i/s, rangés dans le dossier.
           setEtapeZip(`rendu de ${a.fichier}…`);
           const r = await fetch("/api/rendu", { method: "POST", headers: { "Content-Type": "application/json" },
-                                 body: JSON.stringify({ html: a.html, nom: a.fichier, fps: 24, duree: DUREE_ANIMATION }) });
+                                 body: JSON.stringify({ html: a.html, nom: a.fichier, fps: 24, duree: a.dureeAnim || DUREE_ANIMATION }) });
           if (r.ok) {
             const sous = await JSZip.loadAsync(await r.blob());
             await Promise.all(Object.values(sous.files).map(async f => { if (!f.dir) z.file(f.name, await f.async("blob")); }));
-            lignes.push(`${a.fichier}.mov  ·  motion  ·  vidéo ${DUREE_ANIMATION} s à fond transparent (+ séquence PNG dans ${a.fichier}/)  ·  ${a.fichier}.png = image fixe`);
+            lignes.push(`${a.fichier}.mov  ·  motion  ·  vidéo ${a.dureeAnim || DUREE_ANIMATION} s à fond transparent (+ séquence PNG dans ${a.fichier}/)  ·  ${a.fichier}.png = image fixe`);
           } else {
             z.file(`${a.fichier}.html`, a.html); lignes.push(`${a.fichier}.html  ·  motion  ·  rendu PNG indisponible, HTML fourni`);
           }
@@ -223,7 +224,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                   {a.html && <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
                                 onClick={async () => {
                                   const r = await fetch("/api/rendu", { method: "POST", headers: { "Content-Type": "application/json" },
-                                                         body: JSON.stringify({ html: a.html, nom: a.fichier, fps: 24, duree: DUREE_ANIMATION }) });
+                                                         body: JSON.stringify({ html: a.html, nom: a.fichier, fps: 24, duree: a.dureeAnim || DUREE_ANIMATION }) });
                                   if (!r.ok) { alert("Rendu indisponible pour l'instant."); return; }
                                   const u = URL.createObjectURL(await r.blob()); const l = document.createElement("a");
                                   l.href = u; l.download = `${a.fichier}.zip`; l.click(); setTimeout(() => URL.revokeObjectURL(u), 10_000);

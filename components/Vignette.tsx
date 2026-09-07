@@ -198,7 +198,7 @@ export default function Vignette({ ins, i, accent, gabarit, vars, image }: {
     <div className="vignette">
       {ins.moteur === "motion" ? (
         gabarit && vars
-          ? <GabaritApercu gabarit={gabarit} params={ins.params || {}} vars={vars} sombre={i === 1} />
+          ? <GabaritApercu gabarit={gabarit} params={ins.params || {}} vars={vars} sombre={i === 1} anime />
           : <Comp forme={ins.forme} params={ins.params} i={i} />
       ) : image ? (
         <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
