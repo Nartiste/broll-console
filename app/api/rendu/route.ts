@@ -32,7 +32,7 @@ async function navigateur() {
 }
 
 export async function POST(req: Request) {
-  const { html, nom, fps = 24, duree = 2.5, fixe = true } = await req.json().catch(() => ({}));
+  const { html, nom, fps = 24, duree = 2.5, fixe = true, alpha } = await req.json().catch(() => ({}));
   if (typeof html !== "string" || !html.includes("<div class=\"g\">")) {
     return NextResponse.json({ erreur: "Gabarit absent." }, { status: 400 });
   }
@@ -47,21 +47,35 @@ export async function POST(req: Request) {
     await page.evaluate(() => (document as any).fonts?.ready);
 
     const zip = new JSZip();
-    const dossier = zip.folder(base)!;
-    for (let i = 0; i < images; i++) {
-      const t = i / Number(fps);
-      await page.evaluate((t: number) => document.documentElement.style.setProperty("--t", `${t}s`), t);
-      const png = await page.screenshot({ type: "png", omitBackground: true });
-      dossier.file(`${base}_${String(i + 1).padStart(4, "0")}.png`, png);
-    }
-    if (fixe) {
-      await page.evaluate((t: number) => document.documentElement.style.setProperty("--t", `${t}s`), Number(duree) + 1);
-      zip.file(`${base}.png`, await page.screenshot({ type: "png", omitBackground: true }));
+    const capturer = async (suffixe: string) => {
+      const dossier = zip.folder(`${base}${suffixe}`)!;
+      for (let i = 0; i < images; i++) {
+        const t = i / Number(fps);
+        await page.evaluate((t: number) => document.documentElement.style.setProperty("--t", `${t}s`), t);
+        dossier.file(`${base}${suffixe}_${String(i + 1).padStart(4, "0")}.png`, await page.screenshot({ type: "png", omitBackground: true }));
+      }
+      if (fixe) {
+        await page.evaluate((t: number) => document.documentElement.style.setProperty("--t", `${t}s`), Number(duree) + 1);
+        zip.file(`${base}${suffixe}.png`, await page.screenshot({ type: "png", omitBackground: true }));
+      }
+    };
+    await capturer("");
+    // Le gabarit peint tout le cadre ? Son PNG est opaque. On rend aussi une
+    // version sans ce fond — celle qui se superpose au plan dans le montage.
+    let avecAlpha = false;
+    if (alpha !== false && /\.g\s*\{[^}]*\bbackground/.test(html)) {
+      await page.addStyleTag({ content: ".g{background:transparent!important;box-shadow:none!important}" });
+      await capturer("_alpha");
+      avecAlpha = true;
     }
     zip.file(`${base}_LISEZMOI.txt`,
-      `${base}\n\nSéquence PNG ${fps} i/s, ${images} images (${duree} s), 1920×1080, fond transparent.\n` +
+      `${base}\n\nSéquence PNG ${fps} i/s, ${images} images (${duree} s), 1920×1080.\n` +
       `Premiere : Fichier → Importer → sélectionner ${base}_0001.png → cocher « Séquence d'images ».\n` +
-      `${base}.png : l'image fixe finale, même cadre.\n`);
+      `${base}.png : l'image fixe finale, même cadre.\n` +
+      (avecAlpha
+        ? `\n${base}_alpha/ : la même animation SANS le fond plein du gabarit — fond transparent,\n` +
+          `à superposer directement sur votre plan. ${base}/ garde le fond, en carte plein cadre.\n`
+        : `\nFond transparent hors du composant : se superpose directement sur votre plan.\n`));
     const corps = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
     return new Response(corps, {
       headers: { "Content-Type": "application/zip", "Content-Disposition": `attachment; filename="${base}.zip"` },

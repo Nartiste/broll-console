@@ -124,13 +124,19 @@ const ANIMATION = `
 .g > * > *:nth-child(4){animation-delay:calc(.8s - var(--t))}
 .g > * > *:nth-child(5){animation-delay:calc(.9s - var(--t))}
 .g > * > *:nth-child(n+6){animation-delay:calc(1s - var(--t))}
+.g > * > * > *{animation:g-elem .45s cubic-bezier(.2,.8,.2,1) both;animation-play-state:paused}
+.g > * > * > *:nth-child(1){animation-delay:calc(.7s - var(--t))}
+.g > * > * > *:nth-child(2){animation-delay:calc(.8s - var(--t))}
+.g > * > * > *:nth-child(3){animation-delay:calc(.9s - var(--t))}
+.g > * > * > *:nth-child(4){animation-delay:calc(1s - var(--t))}
+.g > * > * > *:nth-child(n+5){animation-delay:calc(1.1s - var(--t))}
 @keyframes g-cadre{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
 @keyframes g-elem{from{opacity:0;transform:translateY(1.2vw)}to{opacity:1;transform:none}}
 `;
 
 export function document(
   g: Gabarit, params: Record<string, any>, vars: Record<string, string>, sombre = false,
-  opts: { anime?: boolean; transparent?: boolean } = {},
+  opts: { anime?: boolean; transparent?: boolean; sansFond?: boolean } = {},
 ): string {
   const v = { ...vars };
   if (sombre) {
@@ -148,7 +154,12 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:${fond};col
 .g{width:100%;height:100%;position:relative}
 ${g.css}
 ${opts.anime ? ANIMATION : ""}
+${opts.sansFond ? ".g{background:transparent!important;box-shadow:none!important}" : ""}
 </style><div class="g">${rendre(g.html, params)}</div>`;
 }
+
+/** Le gabarit peint-il tout le cadre ? Alors son PNG est opaque et ne se
+ *  superpose pas à un plan : on propose aussi une version sans ce fond. */
+export const peintLeFond = (css: string) => /\.g\s*\{[^}]*\bbackground/.test(css);
 
 export const nouvelId = () => Math.random().toString(36).slice(2, 9);
