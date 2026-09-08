@@ -5,6 +5,8 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { depenser, exiger } from "@/lib/garde";
+import { COUTS } from "@/lib/tarifs";
 
 export const maxDuration = 600;
 export const dynamic = "force-dynamic";
@@ -63,10 +65,23 @@ async function navigateur() {
 }
 
 export async function POST(req: Request) {
-  const { html, nom, fps = 24, duree = 2.5, fixe = true, alpha } = await req.json().catch(() => ({}));
-  if (typeof html !== "string" || !html.includes("<div class=\"g\">")) {
-    return NextResponse.json({ erreur: "Gabarit absent." }, { status: 400 });
+  const g = await exiger(req);
+  if (!g.ok) return g.reponse;
+  const corpsReq = await req.json().catch(() => ({}));
+  const { nom, fixe = true, alpha } = corpsReq;
+  const fps = Math.max(12, Math.min(30, Math.round(Number(corpsReq.fps) || 24)));
+  const duree = Math.max(1, Math.min(8, Number(corpsReq.duree) || 2.5));
+  const htmlBrut = corpsReq.html;
+  if (typeof htmlBrut !== "string" || !htmlBrut.includes("<div class=\"g\">") || htmlBrut.length > 400_000) {
+    return NextResponse.json({ erreur: "Gabarit absent ou trop lourd." }, { status: 400 });
   }
+  // Le HTML vient du navigateur : aucun script, aucun gestionnaire d'événement,
+  // aucune ressource externe n'y a sa place. Ce qui reste est du HTML et du CSS.
+  const html = htmlBrut
+    .replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "").replace(/<(link|object|embed|meta http-equiv)[^>]*>/gi, "");
+  const d = await depenser(g.qui, "rendu", COUTS.rendu, String(nom || ""));
+  if (!d.ok) return d.reponse;
   const base = String(nom || "gabarit").replace(/[^\w.-]+/g, "_");
   const images = Math.max(1, Math.min(240, Math.round(Number(fps) * Number(duree))));
 
@@ -74,7 +89,11 @@ export async function POST(req: Request) {
   try {
     b = await navigateur();
     const page = await b.newPage();
-    await page.setContent(html, { waitUntil: "load" });
+    page.setDefaultTimeout(30_000);
+    // Rien ne sort : la page n'a besoin d'aucune ressource réseau.
+    await page.setRequestInterception(true);
+    page.on("request", r => { if (r.isNavigationRequest() && r.frame() === page.mainFrame()) r.continue(); else r.abort(); });
+    await page.setContent(html, { waitUntil: "load", timeout: 30_000 });
     await page.evaluate(() => (document as any).fonts?.ready);
     // Figer à t : chaque animation CSS de la page — celles de l'entrée générique
     // comme celles qu'un gabarit apporte — est mise en pause et placée à t.

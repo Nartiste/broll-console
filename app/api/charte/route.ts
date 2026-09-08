@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { configure, extraireCharte, type Reference } from "@/lib/anthropic";
+import { depenser, exiger } from "@/lib/garde";
+import { COUTS } from "@/lib/tarifs";
 
 export const maxDuration = 120;
 
@@ -9,6 +11,8 @@ export const maxDuration = 120;
  * produit — la charte n'est pas saisie, elle est déduite de la matière.
  */
 export async function POST(req: Request) {
+  const g = await exiger(req);
+  if (!g.ok) return g.reponse;
   if (!configure()) {
     return NextResponse.json({ erreur: "ANTHROPIC_API_KEY absente : l'extraction de charte passe par le modèle." }, { status: 400 });
   }
@@ -20,6 +24,9 @@ export async function POST(req: Request) {
   if (!fichiers.length && !consigne) {
     return NextResponse.json({ erreur: "Aucune référence ni consigne reçue." }, { status: 400 });
   }
+
+  const d = await depenser(g.qui, "charte", COUTS.charte, consigne || fichiers.map(f => f.name).join(", "));
+  if (!d.ok) return d.reponse;
 
   const refs: Reference[] = [];
   for (const f of fichiers.slice(0, 12)) {

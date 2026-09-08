@@ -1,5 +1,7 @@
 "use client";
 
+import { appelApi, lireJson } from "@/lib/api-client";
+
 /**
  * Le dépôt du script : le geste d'entrée du produit.
  *
@@ -140,8 +142,8 @@ export default function Depot({ compact = false }: { compact?: boolean }) {
     try {
       const corps = new FormData();
       corps.append("fichier", fichier);
-      const r = await fetch("/api/extraire", { method: "POST", body: corps });
-      const c = await r.json();
+      const r = await appelApi("/api/extraire", { method: "POST", body: corps });
+      const c = await lireJson(r);
       if (!r.ok) { setErreur(c.erreur || "Lecture impossible."); return; }
       // Un fichier sans aucune marque de prompteur est rarement un script —
       // souvent une charte ou un document déposé au mauvais endroit. On demande.

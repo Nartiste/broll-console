@@ -5,6 +5,7 @@ import type { Plan } from "@/lib/analyse";
 import { DUREE_ANIMATION, dureeDe, document as documentGabarit, type Gabarit } from "@/lib/gabarits";
 import { TARIFS } from "@/lib/tarifs";
 import { cle, deposer, empreinte, enCache, recuperer, rendre, telecharger } from "@/lib/rendus";
+import { appelApi, lireJson } from "@/lib/api-client";
 import type { ArticleProd, Decision, Production as Prod, Projet } from "@/lib/store";
 
 const slug = (t: string) =>
@@ -100,11 +101,11 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     if (!confirm(`Lancer ${clips.length} clip${clips.length > 1 ? "s" : ""} Seedance en ${resolution} — ${secondes} secondes de vidéo, ordre de grandeur ${cout.toFixed(2)} $ hors quota gratuit ?`)) return;
     setLancement("en-cours"); setErreur(null);
     try {
-      const r = await fetch("/api/production", {
+      const r = await appelApi("/api/production", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resolution, articles: clips.map(c => ({ n: c.n, prompt: c.prompt, mouvement: c.mouvement, image: c.image, duree: c.duree })) }),
       });
-      const c = await r.json();
+      const c = await lireJson(r);
       if (!r.ok) throw new Error(c.erreur || "Lancement impossible");
       const parN = new Map<number, { tache?: string; erreur?: string }>((c.resultats as any[]).map(x => [x.n, x]));
       const articles: ArticleProd[] = candidats.map(a => {
@@ -125,8 +126,8 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     let arret = false;
     const tick = async () => {
       try {
-        const r = await fetch(`/api/production/etat?ids=${actifs.map(a => a.tache).join(",")}`, { cache: "no-store" });
-        const c = await r.json();
+        const r = await appelApi(`/api/production/etat?ids=${actifs.map(a => a.tache).join(",")}`, { cache: "no-store" });
+        const c = await lireJson(r);
         if (arret || !r.ok) return;
         const parId = new Map<string, any>((c.etats as any[]).map(e => [e.id, e]));
         const articles = prod.articles.map(a => {
@@ -222,7 +223,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       const timecode = (n: number) => { const i = plan.inserts.find(x => x.n === n); if (!i) return "     "; const t = i.entree; return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`; };
       for (const a of prod.articles) {
         if (a.statut === "pret" && a.video) {
-          const r = await fetch(`/api/production/fichier?url=${encodeURIComponent(a.video)}&nom=${a.fichier}.mp4`);
+          const r = await appelApi(`/api/production/fichier?url=${encodeURIComponent(a.video)}&nom=${a.fichier}.mp4`);
           if (r.ok) {
             z.file(`01-TIMELINE/${a.fichier}.mp4`, await r.blob());
             timeline.push(`${timecode(a.n)}  ${a.fichier}.mp4  ·  B-roll ${a.duree} s  ·  piste V2, en coupe sur le plan`);
@@ -332,8 +333,12 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                 })()}
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   {a.video && <video src={a.video} controls preload="metadata" style={{ width: 160, borderRadius: 8, background: "#000" }} />}
-                  {a.video && <a className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
-                                 href={`/api/production/fichier?url=${encodeURIComponent(a.video)}&nom=${a.fichier}.mp4`}>Télécharger</a>}
+                  {a.video && <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
+                                 onClick={async () => {
+                                   const r = await appelApi(`/api/production/fichier?url=${encodeURIComponent(a.video!)}&nom=${a.fichier}.mp4`);
+                                   if (!r.ok) { setErreur((await lireJson(r)).erreur || "Téléchargement impossible."); return; }
+                                   telecharger(await r.blob(), `${a.fichier}.mp4`);
+                                 }}>Télécharger .mp4</button>}
                   {vivants[a.fichier] && (
                     rendus[a.fichier] === "pret" ? (
                       <>

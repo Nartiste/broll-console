@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { configure, extraireGabarit, type Reference } from "@/lib/anthropic";
 import { nouvelId, type FormeMotion } from "@/lib/gabarits";
+import { depenser, exiger } from "@/lib/garde";
+import { COUTS } from "@/lib/tarifs";
 
 export const maxDuration = 120;
 
@@ -10,6 +12,8 @@ export const maxDuration = 120;
  * contenu de n'importe quel insert.
  */
 export async function POST(req: Request) {
+  const g = await exiger(req);
+  if (!g.ok) return g.reponse;
   if (!configure()) {
     return NextResponse.json({ erreur: "ANTHROPIC_API_KEY absente : l'extraction passe par le modèle." }, { status: 400 });
   }
@@ -24,6 +28,9 @@ export async function POST(req: Request) {
   if (!fichiers.length && !(consigne && actuel)) {
     return NextResponse.json({ erreur: "Il faut une capture du composant, ou une consigne sur un gabarit existant." }, { status: 400 });
   }
+
+  const d = await depenser(g.qui, "gabarit", COUTS.gabarit, consigne || fichiers[0]?.name || "");
+  if (!d.ok) return d.reponse;
 
   const refs: Reference[] = [];
   for (const f of fichiers.slice(0, 4)) {

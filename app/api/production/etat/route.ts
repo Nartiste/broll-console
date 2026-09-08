@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { configure, etatClip } from "@/lib/modelark";
+import { exiger } from "@/lib/garde";
 
 export const dynamic = "force-dynamic";
 
 /** L'état de plusieurs tâches d'un coup — la planche interroge toutes les dix secondes. */
 export async function GET(req: Request) {
+  const g = await exiger(req);
+  if (!g.ok) return g.reponse;
   if (!configure()) return NextResponse.json({ erreur: "ARK_API_KEY absente." }, { status: 400 });
   const ids = (new URL(req.url).searchParams.get("ids") || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 60);
   const etats = await Promise.all(ids.map(async id => {

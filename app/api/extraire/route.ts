@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { exiger } from "@/lib/garde";
 
 export const maxDuration = 60;
 
@@ -39,6 +40,8 @@ function texteDuPdf(pages: { items: { str: string; transform: number[] }[] }[]) 
 }
 
 export async function POST(req: Request) {
+  const g = await exiger(req);
+  if (!g.ok && (g.reponse as Response).status === 429) return g.reponse;   // gratuit : seul le débit est borné
   const form = await req.formData().catch(() => null);
   const fichier = form?.get("fichier");
   if (!(fichier instanceof File)) {

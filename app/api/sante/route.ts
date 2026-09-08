@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { disponibles } from "@/lib/images";
 import { configure as arkConfigure } from "@/lib/modelark";
 import { configure as claudeConfigure } from "@/lib/anthropic";
+import { exiger, gardeConfiguree, PLAFONDS } from "@/lib/garde";
 
 /**
  * Ce qui est branché et ce qui manque, aux noms exacts des variables.
@@ -10,7 +11,9 @@ import { configure as claudeConfigure } from "@/lib/anthropic";
  * simplement absente, et le moteur reste muet. Cette route existe pour que le
  * diagnostic prenne dix secondes au lieu d'une soirée.
  */
-export async function GET() {
+export async function GET(req: Request) {
+  const g = await exiger(req);
+  if (!g.ok) return g.reponse;
   const images = disponibles();
   const choisi = process.env.IMAGE_PROVIDER || null;
   const actif = images.find(i => i.id === choisi) || images.find(i => i.configure) || null;

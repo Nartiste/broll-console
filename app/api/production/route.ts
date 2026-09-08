@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { configure, lancerClip } from "@/lib/modelark";
+import { depenser, exiger } from "@/lib/garde";
+import { TARIFS } from "@/lib/tarifs";
 
 export const maxDuration = 120;
 
@@ -14,14 +16,20 @@ export const maxDuration = 120;
  * pourquoi il a été refusé.
  */
 export async function POST(req: Request) {
+  const g = await exiger(req);
+  if (!g.ok) return g.reponse;
   if (!configure()) return NextResponse.json({ erreur: "ARK_API_KEY absente : aucun clip ne peut partir." }, { status: 400 });
   const { articles, resolution } = await req.json().catch(() => ({}));
   if (!Array.isArray(articles) || !articles.length) {
     return NextResponse.json({ erreur: "Aucun clip à lancer." }, { status: 400 });
   }
-  const res = typeof resolution === "string" ? resolution : (process.env.ARK_VIDEO_RESOLUTION || "720p");
+  const res = typeof resolution === "string" && TARIFS.video[resolution] ? resolution : (process.env.ARK_VIDEO_RESOLUTION || "720p");
+  const lot = articles.slice(0, 40);
+  const secondes = lot.reduce((t: number, a: any) => t + Math.max(4, Math.min(15, Math.round(Number(a?.duree) || 4))), 0);
+  const d = await depenser(g.qui, "production", secondes * TARIFS.video[res], `${lot.length} clips · ${secondes} s · ${res}`);
+  if (!d.ok) return d.reponse;
   const resultats: { n: number; tache?: string; erreur?: string }[] = [];
-  for (const a of articles.slice(0, 40)) {
+  for (const a of lot) {
     if (typeof a?.prompt !== "string" || !a.prompt.trim()) { resultats.push({ n: a?.n, erreur: "Prompt vide." }); continue; }
     // L'image de référence fixe l'apparence ; le prompt vidéo doit dire ce qui
     // SE PASSE. Sans action décrite, le modèle rend un zoom sur une image fixe.

@@ -1,6 +1,7 @@
 "use client";
 
 import { supabase } from "./supabase";
+import { appelApi, lireJson } from "./api-client";
 
 /**
  * Les fichiers rendus d'un gabarit — le .mov à fond transparent, l'image
@@ -31,11 +32,11 @@ export function empreinte(html: string): string {
 
 /** Fait rendre le gabarit par le serveur et en tire les fichiers utiles. */
 export async function rendre(projetId: string, a: { html: string; fichier: string; duree: number }): Promise<FichiersRendu> {
-  const r = await fetch("/api/rendu", {
+  const r = await appelApi("/api/rendu", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ html: a.html, nom: a.fichier, fps: 24, duree: a.duree }),
   });
-  if (!r.ok) throw new Error(`Rendu refusé (${r.status})`);
+  if (!r.ok) throw new Error((await lireJson(r)).erreur || `Rendu refusé (${r.status})`);
   const zip = await r.blob();
   const JSZip = (await import("jszip")).default;
   const z = await JSZip.loadAsync(zip);

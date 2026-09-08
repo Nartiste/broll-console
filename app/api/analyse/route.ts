@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { CADRAGE_DEFAUT, choixDeterministes, composer, type Cadrage } from "@/lib/analyse";
 import { analyserAvecClaude, configure, type Effort } from "@/lib/anthropic";
+import { appelant, depenser, gardeConfiguree } from "@/lib/garde";
+import { COUTS } from "@/lib/tarifs";
 
 export const maxDuration = 300;
 
@@ -28,7 +30,15 @@ export async function POST(req: Request) {
                                plan: composer(script, c, choix, t) });
   };
 
-  if (!configure()) return repli("ANTHROPIC_API_KEY absente : analyse déterministe, libellés approximatifs.");
+  if (!configure()) return repli("Analyse par le modèle non configurée sur ce déploiement : analyse déterministe, libellés approximatifs.");
+  if (script.length > 60_000) return repli("Script très long : analyse déterministe. Coupez-le en deux vidéos pour le jugement par le modèle.");
+
+  // Sans compte, le palier déterministe — gratuit — fait le travail ; le modèle
+  // ne part que pour un compte, sous plafond.
+  const qui = gardeConfiguree() ? await appelant(req) : { id: "dev", email: "dev@local", jeton: "" };
+  if (!qui) return repli("Connectez-vous pour l'analyse par le modèle : ici, analyse déterministe.");
+  const d = await depenser(qui, "analyse", COUTS.analyse, t);
+  if (!d.ok) { const c = await d.reponse.json(); return repli(c.erreur); }
 
   try {
     const { choix, titre: titreModele } = await analyserAvecClaude(script, r, t, c.partBroll, niveau);

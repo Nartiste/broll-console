@@ -8,6 +8,7 @@ import { EXEMPLES, LIBELLES, SLOTS, type FormeMotion, type Gabarit, dureeDe } fr
 import { troisPrompts } from "@/lib/images";
 import { Comp } from "./Vignette";
 import GabaritApercu from "./GabaritApercu";
+import { appelApi, lireJson } from "@/lib/api-client";
 import { integre } from "@/lib/gabarits-integres";
 
 /** La consigne d'un clic : un gabarit sans mouvement propre en reçoit un. */
@@ -76,11 +77,11 @@ export default function Console({ initial }: { initial: Projet }) {
       const note = dec(n).note?.trim();
       const base = promptsDe(ins);
       const prompts = note ? base.map(p => `${p} Retouche demandée : ${note}.`) : base;
-      const r = await fetch("/api/vignettes", {
+      const r = await appelApi("/api/vignettes", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompts }),
       });
-      const c = await r.json();
+      const c = await lireJson(r);
       if (!r.ok) throw new Error(c.erreur || "Génération impossible");
       const images = (c.vignettes as any[]).map(v => (v.ok ? v.images?.[0]?.affichage || null : null));
       const rate = (c.vignettes as any[]).find(v => !v.ok);
@@ -110,8 +111,8 @@ export default function Console({ initial }: { initial: Projet }) {
       if (opts.consigne) corps.append("consigne", opts.consigne);
       if (opts.actuel) corps.append("actuel", JSON.stringify(opts.actuel));
       corps.append("charte", JSON.stringify({ nom: projet.da.nom, resume: projet.da.resume }));
-      const r = await fetch("/api/gabarit", { method: "POST", body: corps });
-      const c = await r.json();
+      const r = await appelApi("/api/gabarit", { method: "POST", body: corps });
+      const c = await lireJson(r);
       if (!r.ok) throw new Error(c.erreur || "Extraction impossible");
       const g: Gabarit = c.gabarit;
       const autres = (projet.da.gabarits || []).filter(x => x.id !== g.id);
@@ -139,12 +140,12 @@ export default function Console({ initial }: { initial: Projet }) {
     const da = daFraiche || projet.da;
     setAnalyse("en-cours"); setDepuis(Date.now()); setChrono(0);
     try {
-      const r = await fetch("/api/analyse", {
+      const r = await appelApi("/api/analyse", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ script: projet.script, cadrage: projet.cadrage,
                                registre: da.registre, titre: projet.titre }),
       });
-      const c = await r.json();
+      const c = await lireJson(r);
       if (!r.ok) throw new Error(c.erreur || "Analyse impossible");
       const patch = { choix: c.choix, palier: c.palier, avertissement: c.avertissement || null,
                       titre: c.titre || projet.titre };
@@ -167,8 +168,8 @@ export default function Console({ initial }: { initial: Projet }) {
       // On part toujours de la charte en place : une consigne la fait évoluer,
       // des références neuves la complètent, jamais de retour à zéro silencieux.
       corps.append("actuelle", JSON.stringify(projet.da));
-      const r = await fetch("/api/charte", { method: "POST", body: corps });
-      const c = await r.json();
+      const r = await appelApi("/api/charte", { method: "POST", body: corps });
+      const c = await lireJson(r);
       if (!r.ok) throw new Error(c.erreur || "Extraction impossible");
       const da: DA = { ...projet.da, ...c.charte };
       // Les prompts de B-roll portent le registre : une nouvelle charte
