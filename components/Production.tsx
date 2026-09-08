@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Plan } from "@/lib/analyse";
-import { DUREE_ANIMATION, dureeDe, document as documentGabarit, type Gabarit } from "@/lib/gabarits";
+import { DUREE_ANIMATION, LIBELLES, dureeDe, document as documentGabarit, type Gabarit } from "@/lib/gabarits";
 import { TARIFS } from "@/lib/tarifs";
 import { cle, deposer, empreinte, enCache, recuperer, rendre, telecharger } from "@/lib/rendus";
 import { appelApi, lireJson } from "@/lib/api-client";
@@ -76,7 +76,9 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     const g = gabaritPour(a.forme);
     const i = plan.inserts.find(x => x.n === a.n);
     if (g && i) {
-      const html = documentGabarit(g, i.params || {}, vars, false, { anime: true, transparent: true });
+      const d = dec(i.bloc);
+      const variante = (["clair", "sombre", "inverse"] as const)[d.variante] || "clair";
+      const html = documentGabarit(g, i.params || {}, vars, variante, { anime: true, transparent: true });
       return { html, duree: dureeDe(g), empreinte: empreinte(html) };
     }
     return a.html ? { html: a.html, duree: a.dureeAnim || DUREE_ANIMATION, empreinte: empreinte(a.html) } : null;
@@ -299,15 +301,19 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
         <>
           <div className="devis" style={{ marginTop: 14, borderRadius: 14, padding: 16 }}>
             <div className="l"><span>Inserts gardés</span><b>{candidats.length}</b></div>
-            <div className="l"><span>Clips Seedance à lancer</span><b>{clips.length}</b></div>
-            <div className="l"><span>Secondes de vidéo (4 à 15 s par clip)</span><b>{secondes} s</b></div>
-            <div className="l"><span>Résolution</span>
-              <select className="champ" style={{ width: "auto", padding: "6px 10px" }} value={resolution} onChange={e => setResolution(e.target.value)}>
-                {["480p", "720p", "1080p"].map(r => <option key={r} value={r}>{r} · ≈ {TARIFS.video[r].toFixed(2)} $/s</option>)}
-              </select>
-            </div>
-            <div className="l"><span>Ordre de grandeur</span><b>≈ {cout.toFixed(2)} $</b></div>
-            <div className="l"><span>Gabarits motion, rendus en .mov à fond transparent</span><b>{candidats.filter(c => c.html).length}</b></div>
+            <div className="l"><span>Gabarits motion, rendus en .mov à fond transparent (sans coût)</span><b>{candidats.filter(c => c.html).length}</b></div>
+            {clips.length > 0 && (
+              <>
+                <div className="l"><span>Clips Seedance à lancer</span><b>{clips.length}</b></div>
+                <div className="l"><span>Secondes de vidéo (4 à 15 s par clip)</span><b>{secondes} s</b></div>
+                <div className="l"><span>Résolution</span>
+                  <select className="champ" style={{ width: "auto", padding: "6px 10px" }} value={resolution} onChange={e => setResolution(e.target.value)}>
+                    {["480p", "720p", "1080p"].map(r => <option key={r} value={r}>{r} · ≈ {TARIFS.video[r].toFixed(2)} $/s</option>)}
+                  </select>
+                </div>
+                <div className="l"><span>Ordre de grandeur</span><b>≈ {cout.toFixed(2)} $</b></div>
+              </>
+            )}
           </div>
           {sansImage > 0 && (
             <p className="pourquoi" style={{ color: "var(--signal)" }}>
@@ -319,7 +325,9 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
             <button className="btn" disabled={lancement === "en-cours" || !candidats.length} onClick={lancer}>
               {lancement === "en-cours" ? "Envoi à Seedance…" : clips.length ? `Lancer ${clips.length} clip${clips.length > 1 ? "s" : ""}` : `Rendre ${candidats.length} gabarit${candidats.length > 1 ? "s" : ""}`}
             </button>
-            <span className="muet" style={{ fontSize: 12.5 }}>C&apos;est ici que l&apos;argent part. Rien avant ce clic.</span>
+            <span className="muet" style={{ fontSize: 12.5 }}>
+              {clips.length ? "C'est ici que l'argent part. Rien avant ce clic." : "Aucun clip à payer : seulement des gabarits à rendre, quelques minutes chacun."}
+            </span>
           </div>
         </>
       )}
@@ -340,7 +348,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                 <div>
                   <div className="mono" style={{ fontSize: 12.5 }}>{a.fichier}.{a.moteur === "broll" ? "mp4" : "mov"}</div>
                   <div className="muet" style={{ fontSize: 11.5, marginTop: 2 }}>
-                    {a.moteur === "broll" ? `B-roll · ${a.duree}s${a.image ? " · depuis la vignette validée" : " · depuis le prompt seul"}` : `Motion · ${a.forme}${vivants[a.fichier] ? ` · ${vivants[a.fichier]!.duree} s · .mov à fond transparent` : ""}`}
+                    {a.moteur === "broll" ? `B-roll · ${a.duree}s${a.image ? " · depuis la vignette validée" : " · depuis le prompt seul"}` : `Motion · ${(LIBELLES as any)[a.forme]?.nom || a.forme}${vivants[a.fichier] ? ` · ${vivants[a.fichier]!.duree} s · .mov à fond transparent` : ""}`}
                     {a.erreur && !vivants[a.fichier] && <span style={{ color: a.statut === "echec" ? "var(--alerte)" : "var(--encre-3)" }}> — {a.erreur}</span>}
                   </div>
                 </div>

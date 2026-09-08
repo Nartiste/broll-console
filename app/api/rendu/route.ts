@@ -79,7 +79,9 @@ export async function POST(req: Request) {
   // aucune ressource externe n'y a sa place. Ce qui reste est du HTML et du CSS.
   const html = htmlBrut
     .replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
-    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "").replace(/<(link|object|embed|meta http-equiv)[^>]*>/gi, "");
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "").replace(/<(object|embed|meta http-equiv)[^>]*>/gi, "")
+    // Seul lien toléré : la feuille des polices de la charte chez Google Fonts.
+    .replace(/<link\b[^>]*>/gi, l => /href="https:\/\/fonts\.googleapis\.com\/css2\?[^"]*"/.test(l) && /rel="stylesheet"/.test(l) ? l : "");
   const d = await depenser(g.qui, "rendu", COUTS.rendu, String(nom || ""));
   if (!d.ok) return d.reponse;
   const base = String(nom || "gabarit").replace(/[^\w.-]+/g, "_");
@@ -92,9 +94,17 @@ export async function POST(req: Request) {
     page.setDefaultTimeout(30_000);
     // Rien ne sort : la page n'a besoin d'aucune ressource réseau.
     await page.setRequestInterception(true);
-    page.on("request", r => { if (r.isNavigationRequest() && r.frame() === page.mainFrame()) r.continue(); else r.abort(); });
+    // …sauf les polices de la charte, chez Google Fonts : le .mov doit avoir la même typographie que l'aperçu.
+    const POLICES = /^https:\/\/fonts\.(googleapis|gstatic)\.com\//;
+    page.on("request", r => { if ((r.isNavigationRequest() && r.frame() === page.mainFrame()) || POLICES.test(r.url())) r.continue(); else r.abort(); });
     await page.setContent(html, { waitUntil: "load", timeout: 30_000 });
-    await page.evaluate(() => (document as any).fonts?.ready);
+    // Les polices déclarées par la feuille Google ne se chargent qu'à l'usage :
+    // on force leur chargement avant la première capture, sinon la trame 1
+    // part en police de secours.
+    await Promise.race([
+      page.evaluate(() => Promise.all([...(document as any).fonts].map((f: any) => f.load().catch(() => null))).then(() => (document as any).fonts.ready)),
+      new Promise(r => setTimeout(r, 10_000)),
+    ]);
     // Figer à t : chaque animation CSS de la page — celles de l'entrée générique
     // comme celles qu'un gabarit apporte — est mise en pause et placée à t.
     const figer = (t: number) => page.evaluate((ms: number) => {

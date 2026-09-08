@@ -142,20 +142,45 @@ const ANIMATION = `
 @keyframes g-elem{from{opacity:0;transform:translateY(3.5vw) scale(.9)}to{opacity:1;transform:none}}
 `;
 
+/** Les familles nommées d'une pile CSS, sans les génériques : ce qu'on peut demander à Google Fonts. */
+export function famillesDe(pile: string | undefined): string[] {
+  if (!pile) return [];
+  const generiques = /^(serif|sans-serif|monospace|system-ui|ui-sans-serif|ui-serif|ui-monospace|cursive|fantasy|inherit|initial)$/i;
+  return pile.split(",").map(f => f.trim().replace(/^['"]|['"]$/g, "")).filter(f => f && !generiques.test(f)).slice(0, 2);
+}
+
+/** La feuille Google Fonts pour les polices de la charte. Vide si elles sont toutes génériques. */
+export function lienPolices(vars: Record<string, string>): string {
+  const familles = [...new Set([...famillesDe(vars["--da-titre"]), ...famillesDe(vars["--da-util"])])];
+  if (!familles.length) return "";
+  const q = familles.map(f => `family=${encodeURIComponent(f).replace(/%20/g, "+")}:wght@400;500;600;700;800;900`).join("&");
+  return `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?${q}&display=swap">`;
+}
+
+export type Variante = "clair" | "sombre" | "inverse";
+
 export function document(
-  g: Gabarit, params: Record<string, any>, vars: Record<string, string>, sombre = false,
+  g: Gabarit, params: Record<string, any>, vars: Record<string, string>, variante: boolean | Variante = false,
   opts: { anime?: boolean; transparent?: boolean; sansFond?: boolean } = {},
 ): string {
   const v = { ...vars };
-  if (sombre) {
+  const mode: Variante = variante === true ? "sombre" : variante === false ? "clair" : variante;
+  if (mode === "sombre") {
     v["--da-fond"] = vars["--da-fond-sombre"];
     v["--da-encre"] = vars["--da-encre-sombre"];
+  }
+  if (mode === "inverse") {
+    // La troisième lecture : le cadre prend l'accent, l'accent devient l'encre sombre.
+    v["--da-fond"] = vars["--da-accent"];
+    v["--da-encre"] = vars["--da-fond-sombre"];
+    v["--da-accent"] = vars["--da-fond-sombre"];
+    v["--da-fond-sombre"] = vars["--da-encre-sombre"];
   }
   const racine = Object.entries(v).map(([k, val]) => `${k}:${val}`).join(";");
   // Transparent : le fond de page disparaît, seul ce que le gabarit peint reste — l'alpha
   // du PNG est alors vrai, et le motion se superpose au plan dans le montage.
   const fond = opts.transparent ? "transparent" : "var(--da-fond)";
-  return `<!doctype html><meta charset="utf-8"><style>
+  return `<!doctype html><meta charset="utf-8">${lienPolices(vars)}<style>
 :root{${racine}}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:${fond};color:var(--da-encre);font-family:var(--da-titre);font-size:4vw}
 *{box-sizing:border-box}

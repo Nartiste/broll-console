@@ -815,7 +815,7 @@ export default function Console({ initial }: { initial: Projet }) {
                           <figcaption>
                             <span className="lettre">Variante {"ABC"[i]}</span>
                             {moteurDe(ins) === "motion"
-                              ? ["Fond clair", "Fond sombre", "Variante rythmique"][i]
+                              ? ["Fond clair", "Fond sombre", "Accent en fond"][i]
                               : promptsDe(ins)[i]}
                           </figcaption>
                         </figure>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { document as documentGabarit, type Gabarit } from "@/lib/gabarits";
+import { document as documentGabarit, type Gabarit, type Variante } from "@/lib/gabarits";
 
 /**
  * Rendu d'un gabarit sur mesure dans une iframe isolée : sans script, sans
@@ -17,9 +17,10 @@ import { document as documentGabarit, type Gabarit } from "@/lib/gabarits";
  * le champ et au survol.
  */
 export default function GabaritApercu({
-  gabarit, params, vars, sombre = false, anime = false,
-}: { gabarit: Gabarit; params: Record<string, any>; vars: Record<string, string>; sombre?: boolean; anime?: boolean }) {
-  const doc = useMemo(() => documentGabarit(gabarit, params, vars, sombre, { anime }), [gabarit, params, vars, sombre, anime]);
+  gabarit, params, vars, sombre = false, variante, anime = false,
+}: { gabarit: Gabarit; params: Record<string, any>; vars: Record<string, string>; sombre?: boolean; variante?: Variante; anime?: boolean }) {
+  const mode: Variante = variante || (sombre ? "sombre" : "clair");
+  const doc = useMemo(() => documentGabarit(gabarit, params, vars, mode, { anime }), [gabarit, params, vars, mode, anime]);
   const cadre = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(!anime);
   const [prise, setPrise] = useState(0);
