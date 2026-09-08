@@ -205,6 +205,8 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
         const courant = prodRef.current;
         if (chemins && courant) {
           onMaj({ ...courant, articles: courant.articles.map(x => x.fichier === a.fichier ? { ...x, movChemin: chemins.mov, pngChemin: chemins.png, apercuUrl: chemins.apercu, empreinte: v.empreinte } : x) });
+          // L'adresse du compte remplace le blob : elle survit au rechargement et se lit partout.
+          if (chemins.apercu) setApercus(q => ({ ...q, [a.fichier]: chemins.apercu! }));
         }
       } catch (e) {
         echouer(a.fichier, e);
