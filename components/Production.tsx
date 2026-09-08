@@ -238,6 +238,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
   /* L'aperçu vidéo de chaque gabarit rendu : en mémoire dans l'onglet, sinon sur le compte. */
   const [apercus, setApercus] = useState<Record<string, string>>({});
   const [affiches, setAffiches] = useState<Record<string, string>>({});
+  const [grand, setGrand] = useState<{ fichier: string; src?: string; affiche?: string; gabarit?: Gabarit; params: Record<string, any>; variante: "clair" | "sombre" | "inverse" } | null>(null);
   const [tour, setTour] = useState(0);
   const lances = useRef(new Set<string>());
   useEffect(() => {
@@ -468,11 +469,17 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                     const src = apercus[a.fichier] || (aJour ? a.apercuUrl : undefined);
                     const affiche = affiches[a.fichier] || (aJour ? a.fixeUrl : undefined);
                     const g = gabaritPour(a.forme); const ins = insertDe(a);
-                    return src
-                      ? <video src={src} poster={affiche} controls preload="metadata" style={{ width: 160, borderRadius: 8, background: "#3c3f3a" }} title={mode === "transparent" ? "Aperçu du rendu transparent, posé sur un gris neutre" : "Aperçu du rendu"} />
-                      : g && ins ? <div className="vignette" style={{ width: 160, borderRadius: 8, flex: "none" }} title="Aperçu animé du gabarit (survoler pour rejouer) — le rendu arrive">
-                          <GabaritApercu gabarit={g} params={ins.params || {}} vars={vars} variante={(["clair", "sombre", "inverse"] as const)[dec(ins.bloc).variante] || "clair"} anime />
-                        </div> : null;
+                    const params = ins ? (ins.forme === a.forme && ins.params && Object.keys(ins.params).length ? ins.params : paramsPour(a.forme as any, ins.texte, ins.section)) : {};
+                    const variante = ins ? ((["clair", "sombre", "inverse"] as const)[dec(ins.bloc).variante] || "clair") : "clair";
+                    // L'aperçu montre l'état final, lisible ; un clic ouvre le lecteur en grand.
+                    return (
+                      <button className="apercu-rendu" title={src ? "Voir le rendu en grand" : "Le rendu arrive — état final du gabarit"}
+                              onClick={() => setGrand({ fichier: a.fichier, src, affiche, gabarit: g, params, variante })}>
+                        {affiche ? <img src={affiche} alt="" />
+                          : g && ins ? <div className="vignette"><GabaritApercu gabarit={g} params={params} vars={vars} variante={variante} /></div> : null}
+                        <span className="lecture">{src ? "▶" : "…"}</span>
+                      </button>
+                    );
                   })()}
                   {a.video && <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
                                  onClick={async () => {
@@ -515,6 +522,20 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
             </button>
           </div>
         </>
+      )}
+          {grand && (
+        <div className="voile" onClick={() => setGrand(null)}>
+          <div className="grand" onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+              <b className="mono" style={{ fontSize: 13 }}>{grand.fichier}.mov</b>
+              <span className="muet" style={{ fontSize: 12.5 }}>{grand.src ? (mode === "transparent" ? "le rendu, posé sur un gris neutre pour voir la transparence" : "le rendu, tel qu'il sera livré") : "le gabarit tel qu'il sera rendu (survoler pour rejouer le mouvement)"}</span>
+              <button className="btn fantome" style={{ marginLeft: "auto", padding: "6px 12px", fontSize: 12.5 }} onClick={() => setGrand(null)}>Fermer</button>
+            </div>
+            {grand.src
+              ? <video src={grand.src} poster={grand.affiche} controls autoPlay playsInline style={{ width: "100%", aspectRatio: "16/9", borderRadius: 10, background: "#3c3f3a" }} />
+              : grand.gabarit ? <div className="vignette" style={{ borderRadius: 10 }}><GabaritApercu gabarit={grand.gabarit} params={grand.params} vars={vars} variante={grand.variante} anime /></div> : null}
+          </div>
+        </div>
       )}
     </div>
   );

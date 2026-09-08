@@ -336,3 +336,12 @@ pre { background: var(--fond); border: 1px solid var(--trait); border-radius: 12
   .variante .vignette { width: 100%; }
   .etapes button { flex: 1; justify-content: center; }
 }
+
+/* ---- aperçu d'un rendu : vignette lisible, lecteur en grand ---- */
+.apercu-rendu { position: relative; width: 240px; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden; background: #3c3f3a; padding: 0; border: 1px solid var(--trait); cursor: pointer; flex: none; }
+.apercu-rendu img, .apercu-rendu .vignette { width: 100%; height: 100%; object-fit: cover; display: block; }
+.apercu-rendu .lecture { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 34px; height: 34px; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; display: grid; place-items: center; font-size: 13px; pointer-events: none; }
+.apercu-rendu:hover { border-color: var(--trait-fort); }
+.voile { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.7); display: grid; place-items: center; padding: 24px; }
+.grand { width: min(96vw, 1100px); background: var(--surface); border: 1px solid var(--trait); border-radius: 14px; padding: 16px; box-shadow: var(--ombre); }
+@media (max-width: 900px) { .apercu-rendu { width: 100%; } }
