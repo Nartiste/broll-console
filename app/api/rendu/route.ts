@@ -29,6 +29,15 @@ export const dynamic = "force-dynamic";
  */
 const executer = promisify(execFile);
 
+/* Un seul rendu à la fois par instance : deux Chromium côte à côte font
+   sauter la mémoire, et la fonction est tuée sans un mot. Le suivant attend. */
+let file: Promise<unknown> = Promise.resolve();
+function auTour<T>(travail: () => Promise<T>): Promise<T> {
+  const tour = file.then(travail, travail);
+  file = tour.catch(() => {});
+  return tour;
+}
+
 /** Assemble les images en .mov à canal alpha, plus un aperçu MP4 que le
  *  navigateur sait lire (posé sur un gris neutre, l'alpha n'existant pas en H.264).
  *  Null si ffmpeg manque ou échoue : la séquence PNG reste livrée. */
@@ -94,6 +103,10 @@ export async function POST(req: Request) {
     .replace(/<link\b[^>]*>/gi, l => /href="https:\/\/fonts\.googleapis\.com\/css2\?[^"]*"/.test(l) && /rel="stylesheet"/.test(l) ? l : "");
   const d = await depenser(g.qui, "rendu", COUTS.rendu, String(nom || ""));
   if (!d.ok) return d.reponse;
+  return auTour(() => rendreTout({ html, nom, fps, duree, fixe, alpha, sequence: corpsReq.sequence === true }));
+}
+
+async function rendreTout({ html, nom, fps, duree, fixe, alpha, sequence }: { html: string; nom: unknown; fps: number; duree: number; fixe: boolean; alpha: unknown; sequence: boolean }) {
   const base = String(nom || "gabarit").replace(/[^\w.-]+/g, "_");
   const images = Math.max(1, Math.min(240, Math.round(Number(fps) * Number(duree))));
 
@@ -124,16 +137,19 @@ export async function POST(req: Request) {
     const zip = new JSZip();
     let avecMov = false;
     const capturer = async (suffixe: string) => {
-      const dossier = zip.folder(`${base}${suffixe}`)!;
+      // La séquence PNG n'entre dans le zip que sur demande : le .mov suffit au
+      // montage, et deux cents PNG en mémoire ont déjà tué la fonction.
+      const dossier = sequence ? zip.folder(`${base}${suffixe}`)! : null;
       const trames: Buffer[] = [];
       for (let i = 0; i < images; i++) {
         const t = i / Number(fps);
         await figer(t);
         const png = Buffer.from(await page.screenshot({ type: "png", omitBackground: true, optimizeForSpeed: true }));
         trames.push(png);
-        dossier.file(`${base}${suffixe}_${String(i + 1).padStart(4, "0")}.png`, png);
+        dossier?.file(`${base}${suffixe}_${String(i + 1).padStart(4, "0")}.png`, png);
       }
       const enc = await encoderMov(trames, Number(fps));
+      trames.length = 0;
       if (enc) {
         zip.file(`${base}${suffixe}.mov`, enc.mov); avecMov = true;
         if (enc.apercu) zip.file(`${base}${suffixe}_apercu.mp4`, enc.apercu);
@@ -162,7 +178,7 @@ export async function POST(req: Request) {
         `Premiere / After Effects : importez-le comme n'importe quelle vidéo. Rien d'autre à cocher.`,
         "");
       if (avecAlpha) lisezmoi.push(`${base}.mov : la même animation avec le fond plein du gabarit, en carte plein cadre.`, "");
-      lisezmoi.push(`${base}${avecAlpha ? "_alpha" : ""}/ : les mêmes images une par une (séquence PNG ${fps} i/s), si votre logiciel préfère.`);
+      if (sequence) lisezmoi.push(`${base}${avecAlpha ? "_alpha" : ""}/ : les mêmes images une par une (séquence PNG ${fps} i/s), si votre logiciel préfère.`);
     } else {
       lisezmoi.push(
         `Séquence PNG ${fps} i/s, ${images} images (${duree} s), 1920×1080${avecAlpha ? `, dans ${base}_alpha/ (fond transparent) et ${base}/ (fond plein)` : ""}.`,
