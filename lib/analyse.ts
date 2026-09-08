@@ -294,6 +294,35 @@ export interface Choix {
 }
 
 /** Les blocs de souffle du script, numérotés — l'unité que les deux paliers notent. */
+/**
+ * Les paramètres d'un gabarit pour un passage donné, quand l'analyse n'en a
+ * pas fourni pour cette forme (l'auteur a changé de moteur ou de forme après
+ * coup). Le palier déterministe tente d'abord ; sinon, une lecture générique
+ * du texte : première ligne en titre, les suivantes en éléments.
+ */
+export function paramsPour(forme: Forme, lignes: string[], section = ""): Record<string, any> {
+  const propres = lignes.map(l => l.trim()).filter(l => l && !l.startsWith("["));
+  const texte = propres.join(" ");
+  const b: Bloc = { lignes: propres, texte, debutMot: 0, mots: compteMots(texte), directives: [], section };
+  const auto = aiguiller(b, note(b));
+  if (auto.forme === forme && auto.params) return auto.params;
+  const nb = nombres(texte);
+  const premiere = propres[0] || section || "";
+  const suite = propres.slice(1).length ? propres.slice(1) : propres;
+  switch (forme) {
+    case "liste-3": return { titre: section || premiere, items: suite.slice(0, 3) };
+    case "liste-5": return { titre: section || premiere, items: suite.slice(0, 5) };
+    case "pyramide": return { niveaux: suite.slice(0, 4) };
+    case "mot-choc": { const caps = capitales(texte); return { mot: (caps.length ? caps.slice(0, 3).join(" ") : premiere).slice(0, 40), sous: (caps.length ? premiere : propres[1] || section).slice(0, 52) }; }
+    case "chiffre": return { valeur: nb[0] || "", legende: (propres[propres.length - 1] || "").slice(0, 40) };
+    case "duo-chiffres": return { a: { v: nb[0] || "", l: premiere.slice(0, 28) }, b: { v: nb[1] || "", l: (propres[1] || "").slice(0, 28) } };
+    case "avant-apres": return { avant: { v: nb[0] || "", l: "avant" }, apres: { v: nb[1] || "", l: "aujourd'hui" } };
+    case "opposition": return { gauche: [premiere, propres[1] || ""], droite: [propres[2] || "", propres[3] || ""] };
+    case "barres": { const pct = pourcentages(texte); return { items: pct.slice(0, 3).map((p, i) => ({ label: (propres[i] || "").slice(0, 40), pct: parseInt(p, 10) })) }; }
+    default: return {};
+  }
+}
+
 export function blocsDuScript(script: string) {
   return decouper(script).blocs.map((b, i) => ({
     i, texte: b.texte, lignes: b.lignes, section: b.section,

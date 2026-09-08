@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Plan } from "@/lib/analyse";
+import { paramsPour, type Plan } from "@/lib/analyse";
 import { DUREE_ANIMATION, LIBELLES, dureeDe, document as documentGabarit, type Gabarit } from "@/lib/gabarits";
 import { TARIFS } from "@/lib/tarifs";
 import { cle, deposer, empreinteRendu, enCache, recuperer, rendre, telecharger, type ModeRendu } from "@/lib/rendus";
@@ -77,9 +77,19 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
      il change dès que le plan se recompose. */
   const insertDe = (a: ArticleProd) => {
     if (a.bloc !== undefined) { const i = plan.inserts.find(x => x.bloc === a.bloc); if (i) return i; }
+    // Une même première ligne peut revenir deux fois dans un script : on
+    // préfère le passage de la même forme, puis celui qui a du contenu.
     const texte = a.fichier.replace(/^\d+-/, "");
-    return plan.inserts.find(x => slug(x.texte[0] || "") === texte) || plan.inserts.find(x => x.n === a.n);
+    const memes = plan.inserts.filter(x => slug(x.texte[0] || "") === texte);
+    return memes.find(x => x.forme === a.forme && x.params) || memes.find(x => x.params) || memes[0] || plan.inserts.find(x => x.n === a.n);
   };
+  /* Les productions d'avant n'avaient pas le bloc : on le fixe une fois pour toutes. */
+  useEffect(() => {
+    if (!prod || !prod.articles.some(a => a.bloc === undefined)) return;
+    const articles = prod.articles.map(a => a.bloc === undefined ? { ...a, bloc: insertDe(a)?.bloc } : a);
+    if (articles.some((a, k) => a.bloc !== prod.articles[k].bloc)) onMaj({ ...prod, articles });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prod?.lancee, plan]);
   /* Le mode de rendu : « plein » ressemble à l'aperçu, fond compris ; « transparent »
      ne garde que le composant, à poser sur le plan face caméra. */
   const mode: ModeRendu = prod?.mode || "plein";
@@ -91,7 +101,10 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     if (g && i) {
       const d = dec(i.bloc);
       const variante = (["clair", "sombre", "inverse"] as const)[d.variante] || "clair";
-      const html = documentGabarit(g, i.params || {}, vars, variante, { anime: true, transparent: mode === "transparent" });
+      // Un passage dont l'analyse n'a pas donné les paramètres de cette forme
+      // (moteur ou forme changés après coup) reçoit une lecture de son texte.
+      const params = i.params && Object.keys(i.params).length ? i.params : paramsPour(a.forme as any, i.texte, i.section);
+      const html = documentGabarit(g, params, vars, variante, { anime: true, transparent: mode === "transparent" });
       return { html, duree: dureeDe(g), empreinte: empreinteRendu(html, mode) };
     }
     return a.html ? { html: a.html, duree: a.dureeAnim || DUREE_ANIMATION, empreinte: empreinteRendu(a.html, mode) } : null;
@@ -106,6 +119,44 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     const v = vivants[a.fichier];
     return Boolean(v && (enCache(cle(projet.id, a.fichier), v.empreinte) || (a.movChemin && a.empreinte === v.empreinte)));
   };
+
+  /* Gardé après le lancement : la production est un instantané, on propose d'y ajouter. */
+  const nouveaux = useMemo(() => {
+    if (!prod) return [] as ArticleProd[];
+    const dedans = new Set<number | undefined>(prod.articles.map(a => a.bloc ?? insertDe(a)?.bloc));
+    return candidats.filter(c => !dedans.has(c.bloc));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prod?.articles, candidats, plan]);
+  function ajouterNouveaux() {
+    if (!prod || !nouveaux.length) return;
+    const k0 = prod.articles.length;
+    const ajout = nouveaux.map((c, k) => ({ ...c, fichier: `${String(k0 + k + 1).padStart(2, "0")}-${c.fichier.replace(/^\d+-/, "")}` }));
+    onMaj({ ...prod, articles: [...prod.articles, ...ajout] });
+  }
+  async function lancerAttente() {
+    if (!prod) return;
+    const attente = prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente");
+    if (!attente.length) return;
+    const sec = attente.reduce((t, c) => t + Math.max(4, Math.min(15, Math.round(c.duree))), 0);
+    if (!confirm(`Lancer ${attente.length} clip${attente.length > 1 ? "s" : ""} Seedance en ${prod.resolution} — ${sec} secondes, ordre de grandeur ${(sec * (TARIFS.video[prod.resolution] ?? 0.09)).toFixed(2)} $ ?`)) return;
+    setLancement("en-cours"); setErreur(null);
+    try {
+      const r = await appelApi("/api/production", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resolution: prod.resolution, projet: projet.id, articles: attente.map(c => ({ n: c.n, fichier: c.fichier, prompt: c.prompt, mouvement: c.mouvement, image: c.image, duree: c.duree })) }),
+      });
+      const c = await lireJson(r);
+      if (!r.ok) throw new Error(c.erreur || "Lancement impossible");
+      const parN = new Map<number, { tache?: string; erreur?: string }>((c.resultats as any[]).map(x => [x.n, x]));
+      const courant = prodRef.current!;
+      onMaj({ ...courant, articles: courant.articles.map(a => {
+        if (a.moteur !== "broll" || a.statut !== "attente") return a;
+        const x = parN.get(a.n);
+        return x?.tache ? { ...a, statut: "file" as const, tache: x.tache } : { ...a, statut: "echec" as const, erreur: x?.erreur || "Refusé" };
+      }) });
+      setLancement("repos");
+    } catch (e) { setLancement("erreur"); setErreur(e instanceof Error ? e.message : "Lancement impossible"); }
+  }
 
   const clips = candidats.filter(c => c.moteur === "broll");
   const secondes = clips.reduce((t, c) => t + Math.max(4, Math.min(15, Math.round(c.duree))), 0);
@@ -378,6 +429,20 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
             </button>
             <span className="muet" style={{ fontSize: 12 }}>Changer de mode relance les rendus.</span>
           </div>
+          {nouveaux.length > 0 && (
+            <div className="pourquoi" style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <span>{nouveaux.length > 1 ? `${nouveaux.length} inserts gardés depuis le lancement ne sont pas dans cette production.` : "1 insert gardé depuis le lancement n'est pas dans cette production."}</span>
+              <button className="btn fantome" style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={ajouterNouveaux}>Les ajouter</button>
+            </div>
+          )}
+          {prod.articles.some(a => a.moteur === "broll" && a.statut === "attente") && (
+            <div className="pourquoi" style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <span>{prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente").length} clip{prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente").length > 1 ? "s" : ""} B-roll en attente de lancement.</span>
+              <button className="btn" style={{ padding: "6px 12px", fontSize: 12.5 }} disabled={lancement === "en-cours"} onClick={lancerAttente}>
+                {lancement === "en-cours" ? "Envoi à Seedance…" : "Lancer ces clips"}
+              </button>
+            </div>
+          )}
           <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
             {prod.articles.map(a => (
               <div key={a.n} style={{ display: "grid", gridTemplateColumns: "minmax(200px, 1fr) 120px auto", gap: 14, alignItems: "center",
