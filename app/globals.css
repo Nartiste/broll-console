@@ -348,3 +348,7 @@ pre { background: var(--fond); border: 1px solid var(--trait); border-radius: 12
 
 /* ---- damier : ce qui est transparent se voit ---- */
 .damier { background-color: #2a2c28; background-image: linear-gradient(45deg, #34362f 25%, transparent 25%, transparent 75%, #34362f 75%), linear-gradient(45deg, #34362f 25%, transparent 25%, transparent 75%, #34362f 75%); background-size: 16px 16px; background-position: 0 0, 8px 8px; }
+
+/* ---- progression : on sait où on en est ---- */
+.progres { height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
+.progres i { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width 1s linear; min-width: 2px; }

@@ -10,6 +10,19 @@ import GabaritApercu from "./GabaritApercu";
 import { ancrer, blobDepuis, estDurable, expiree } from "@/lib/medias";
 import type { ArticleProd, Decision, Production as Prod, Projet } from "@/lib/store";
 
+/* Combien de temps prend un rendu : une base (démarrage de Chromium, encodage)
+   plus un coût par seconde d'animation, corrigés par les derniers rendus
+   réellement mesurés. Assez juste pour dire « reste ≈ 1:30 » sans mentir. */
+const MESURES: number[] = [];
+const baseEstimee = (duree: number) => 45 + 28 * duree;
+export function estimation(duree: number): number {
+  const base = baseEstimee(duree);
+  if (!MESURES.length) return base;
+  const r = MESURES.slice(-5).reduce((a, b) => a + b, 0) / Math.min(5, MESURES.length);
+  return Math.max(20, Math.round(base * r));
+}
+const mmss = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, "0")}`;
+
 const slug = (t: string) =>
   t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "insert";
 
@@ -257,6 +270,10 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
      sans qu'on le demande : un fichier prêt est un fichier téléchargeable.
      Le résultat est gardé en mémoire, et déposé sur le compte s'il y en a un. */
   const [rendus, setRendus] = useState<Record<string, "en-cours" | "pret" | "echec" | undefined>>({});
+  /* Le chronomètre : quand un rendu a commencé, et l'heure qui avance chaque seconde tant qu'on attend. */
+  const [debuts, setDebuts] = useState<Record<string, number>>({});
+  const [horloge, setHorloge] = useState(() => Date.now());
+  const [zipProg, setZipProg] = useState<{ fait: number; total: number; courant: string; debut: number; reste: number } | null>(null);
   const [causes, setCauses] = useState<Record<string, string>>({});
   const echouer = (fichier: string, e: unknown) => {
     setRendus(q => ({ ...q, [fichier]: "echec" }));
@@ -282,9 +299,13 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       const v = a && vivants[a.fichier];
       if (!a || !v) return;
       lances.current.add(a.fichier);
+      const debut = Date.now();
+      setDebuts(q => ({ ...q, [a.fichier]: debut }));
       setRendus(q => ({ ...q, [a.fichier]: "en-cours" }));
       try {
         const f = await rendre(projet.id, { html: v.html, fichier: a.fichier, duree: v.duree, mode: modeDe(a) });
+        MESURES.push(((Date.now() - debut) / 1000) / baseEstimee(v.duree));
+        setDebuts(q => { const { [a.fichier]: _, ...r } = q; return r; });
         setRendus(q => ({ ...q, [a.fichier]: "pret" }));
         if (f.png) setAffiches(q => ({ ...q, [a.fichier]: URL.createObjectURL(f.png!) }));
         if (f.apercu) setApercus(q => ({ ...q, [a.fichier]: URL.createObjectURL(f.apercu!) }));
@@ -296,6 +317,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
           if (chemins.apercu) setApercus(q => ({ ...q, [a.fichier]: chemins.apercu! }));
         }
       } catch (e) {
+        setDebuts(q => { const { [a.fichier]: _, ...r } = q; return r; });
         echouer(a.fichier, e);
         lances.current.delete(a.fichier);
       }
@@ -316,15 +338,46 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       if (mov) return { mov, png: a.pngChemin ? (await recuperer(a.pngChemin)) || undefined : undefined };
     }
     setRendus(q => ({ ...q, [a.fichier]: "en-cours" }));
+    const debut = Date.now();
+    setDebuts(q => ({ ...q, [a.fichier]: debut }));
     try {
       const f = await rendre(projet.id, { html: v.html, fichier: a.fichier, duree: v.duree, mode: modeDe(a) });
+      MESURES.push(((Date.now() - debut) / 1000) / baseEstimee(v.duree));
       setRendus(q => ({ ...q, [a.fichier]: "pret" }));
       return f;
     } catch (e) {
       echouer(a.fichier, e);
       return null;
+    } finally {
+      setDebuts(q => { const { [a.fichier]: _, ...r } = q; return r; });
     }
   }
+  const enTravail = Object.values(rendus).includes("en-cours") || zip === "en-cours";
+  useEffect(() => {
+    if (!enTravail) return;
+    const t = setInterval(() => setHorloge(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [enTravail]);
+  /* La file d'attente telle qu'elle est : ce qui se rend, puis ce qui suit, avec l'heure prévue de chacun. */
+  const attenteDe = (a: ArticleProd): { texte: string; pct: number } | null => {
+    const v = vivants[a.fichier];
+    if (!v || rendus[a.fichier] === "pret" || rendus[a.fichier] === "echec") return null;
+    const est = estimation(v.duree);
+    if (debuts[a.fichier]) {
+      const ecoule = (horloge - debuts[a.fichier]) / 1000;
+      return { texte: `${mmss(ecoule)} écoulé · reste ≈ ${mmss(Math.max(5, est - ecoule))}`, pct: Math.min(96, (ecoule / est) * 100) };
+    }
+    // Pas encore commencé : on additionne ce qu'il reste à ceux qui passent avant.
+    const file = (prod?.articles || []).filter(x => vivants[x.fichier] && rendus[x.fichier] !== "pret" && rendus[x.fichier] !== "echec");
+    let avant = 0;
+    for (const x of file) {
+      if (x.fichier === a.fichier) break;
+      const e = estimation(vivants[x.fichier]!.duree);
+      avant += debuts[x.fichier] ? Math.max(5, e - (horloge - debuts[x.fichier]) / 1000) : e;
+    }
+    const rang = file.findIndex(x => x.fichier === a.fichier) + 1;
+    return { texte: `en file (${rang}${rang === 1 ? "er" : "e"}) · démarre dans ≈ ${mmss(avant)} · durée ≈ ${mmss(est)}`, pct: 0 };
+  };
   const relancer = (a: ArticleProd) => { lances.current.delete(a.fichier); setRendus(q => ({ ...q, [a.fichier]: undefined })); setTour(t => t + 1); };
 
   /* Le dossier est fait pour Premiere, pas pour l'archivage : ce qu'on pose
@@ -334,26 +387,38 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
   async function telechargerDossier() {
     if (!prod) return;
     setZip("en-cours");
+    const debutZip = Date.now();
+    const total = prod.articles.filter(a => (a.statut === "pret" && a.video) || vivants[a.fichier]).length;
+    let fait = 0;
+    // Ce qu'il reste : un rendu entier pour ce qui n'est pas prêt, quelques secondes pour le reste.
+    const resteApres = (k: number) => prod.articles.slice(k).reduce((t, x) => {
+      const v = vivants[x.fichier];
+      if (v) return t + (disponible(x) ? 4 : estimation(v.duree));
+      return t + (x.statut === "pret" && x.video ? 8 : 0);
+    }, 0);
+    const avancer = (courant: string, k: number) => setZipProg({ fait, total, courant, debut: debutZip, reste: resteApres(k) });
     try {
       const JSZip = (await import("jszip")).default;
       const z = new JSZip();
       const timeline: string[] = [];
       const manques: string[] = [];
       const timecode = (a: ArticleProd) => { const i = insertDe(a); if (!i) return "     "; const t = i.entree; return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`; };
-      for (const a of prod.articles) {
+      for (const [k, a] of prod.articles.entries()) {
         if (a.statut === "pret" && a.video) {
-          setEtapeZip(`${a.fichier}…`);
+          avancer(a.fichier, k); setEtapeZip(`${a.fichier}…`);
           const blob = await blobDepuis(a.video);
           if (blob) {
             z.file(`01-TIMELINE/${a.fichier}.mp4`, blob);
             timeline.push(`${timecode(a)}  ${a.fichier}.mp4  ·  B-roll ${a.duree} s  ·  piste V2, en coupe sur le plan`);
+            fait++;
           } else {
             timeline.push(`${timecode(a)}  ${a.fichier}.mp4  ·  B-roll  ·  CLIP INDISPONIBLE (adresse expirée) — relancez la production pour ce passage`);
             manques.push(a.fichier);
           }
         } else if (vivants[a.fichier]) {
-          setEtapeZip(`${a.fichier}…`);
+          avancer(a.fichier, k); setEtapeZip(`${a.fichier}…`);
           const f = await fichiersDe(a);
+          fait++;
           if (!f) {
             z.file(`03-SOURCES/${a.fichier}/${a.fichier}.html`, vivants[a.fichier]!.html);
             timeline.push(`${timecode(a)}  ${a.fichier}  ·  motion  ·  RENDU IMPOSSIBLE, HTML dans 03-SOURCES`);
@@ -380,6 +445,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
         `Premiere : Fichier → Importer → sélectionnez tout 01-TIMELINE. Les .mov ont un canal alpha direct, rien à régler.\n` +
         `Timecode = début de l'insert dans le script (à la vitesse de lecture estimée). Ajustez à l'oreille.\n\n` +
         `ORDRE DE MONTAGE\n${"-".repeat(16)}\n${timeline.join("\n")}\n`);
+      setZipProg({ fait: total, total, courant: "compression du dossier", debut: debutZip, reste: 10 });
       const blob = await z.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob); a.download = `${slug(projet.titre)}-broll.zip`; a.click();
@@ -387,7 +453,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       if (manques.length) setErreur(`Dossier livré sans ${manques.length} clip${manques.length > 1 ? "s" : ""} (${manques.join(", ")}) : adresse expirée. Relancez la production pour ces passages.`);
     } catch (e) {
       setErreur(`Le dossier n'a pas pu être assemblé : ${e instanceof Error ? e.message : "erreur"}.`);
-    } finally { setZip("repos"); setEtapeZip(""); }
+    } finally { setZip("repos"); setEtapeZip(""); setZipProg(null); }
   }
 
   const prets = prod?.articles.filter(a => a.statut === "pret").length || 0;
@@ -544,7 +610,12 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                         <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }} onClick={() => relancer(a)}>Réessayer le rendu</button>
                       </>
                     ) : (
-                      <span className="muet mono" style={{ fontSize: 12 }}>rendu en cours · jusqu'à 3 min</span>
+                      (() => { const w = attenteDe(a); return (
+                        <div style={{ display: "grid", gap: 4, minWidth: 210 }}>
+                          <span className="muet mono" style={{ fontSize: 11.5 }}>{w ? w.texte : "rendu en cours"}</span>
+                          <div className="progres"><i style={{ width: `${w?.pct || 0}%` }} /></div>
+                        </div>
+                      ); })()
                     )
                   )}
                 </div>
@@ -553,9 +624,18 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
           </div>
           <div style={{ display: "flex", gap: 10, marginTop: 14, alignItems: "center", flexWrap: "wrap" }}>
             <button className="btn" disabled={zip === "en-cours" || (prets === 0 && !prod.articles.some(a => vivants[a.fichier]))} onClick={telechargerDossier}>
-              {zip === "en-cours" ? (etapeZip || "Assemblage du dossier…") : "Télécharger le dossier"}
+              {zip === "en-cours" ? "Assemblage en cours…" : "Télécharger le dossier"}
             </button>
-            <span className="muet" style={{ fontSize: 12.5 }}>01-TIMELINE (un fichier par insert, dans l'ordre), 02-IMAGES-FIXES, 03-SOURCES, et un LISEZMOI avec l'ordre de montage. Les fichiers déjà rendus ne sont pas refaits.</span>
+            {zip === "en-cours" && zipProg ? (
+              <div style={{ display: "grid", gap: 5, flex: 1, minWidth: 260 }}>
+                <span className="muet mono" style={{ fontSize: 12 }}>
+                  {zipProg.fait}/{zipProg.total} fichiers · {zipProg.courant} · {mmss((horloge - zipProg.debut) / 1000)} écoulé · fin dans ≈ {mmss(zipProg.reste)}
+                </span>
+                <div className="progres"><i style={{ width: `${Math.min(97, (zipProg.fait / Math.max(1, zipProg.total)) * 100)}%` }} /></div>
+              </div>
+            ) : (
+              <span className="muet" style={{ fontSize: 12.5 }}>01-TIMELINE (un fichier par insert, dans l'ordre), 02-IMAGES-FIXES, 03-SOURCES, et un LISEZMOI avec l'ordre de montage. Les fichiers déjà rendus ne sont pas refaits.</span>
+            )}
             <button className="btn fantome" style={{ marginLeft: "auto" }} onClick={() => { if (confirm("Oublier cette production et repartir du tri ?")) onMaj(undefined as any); }}>
               Nouvelle production
             </button>
