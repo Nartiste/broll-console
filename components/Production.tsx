@@ -7,7 +7,7 @@ import { TARIFS } from "@/lib/tarifs";
 import { cle, deposer, empreinteRendu, enCache, recuperer, rendre, telecharger, type ModeRendu } from "@/lib/rendus";
 import { appelApi, lireJson } from "@/lib/api-client";
 import GabaritApercu from "./GabaritApercu";
-import { ancrer, blobDepuis, estDurable } from "@/lib/medias";
+import { ancrer, blobDepuis, estDurable, expiree } from "@/lib/medias";
 import type { ArticleProd, Decision, Production as Prod, Projet } from "@/lib/store";
 
 const slug = (t: string) =>
@@ -451,11 +451,23 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                 </div>
                 {(() => {
                   const e = vivants[a.fichier] ? (rendus[a.fichier] === "pret" ? "pret" : rendus[a.fichier] === "echec" ? "echec" : "en-cours") : a.statut;
-                  const [texte, couleur] = e === "en-cours" && vivants[a.fichier] ? ["rendu…", "var(--signal)"] : PILULE[e];
+                  const [texte, couleur] = a.moteur === "broll" && a.video && expiree(a.video) ? ["expiré", "var(--alerte)"]
+                    : e === "en-cours" && vivants[a.fichier] ? ["rendu…", "var(--signal)"] : PILULE[e];
                   return <span className="pilule" style={{ justifySelf: "start", color: couleur, borderColor: couleur }}>{texte}</span>;
                 })()}
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  {a.video && <video src={a.video} controls preload="metadata" style={{ width: 160, borderRadius: 8, background: "#000" }} />}
+                  {a.video && expiree(a.video) && (
+                    <span className="muet" style={{ fontSize: 12, color: "var(--alerte)", maxWidth: 300 }}>
+                      Ce clip a expiré chez le moteur (les adresses valent 24 h) avant d'être copié sur votre compte. Il faut le régénérer.
+                    </span>
+                  )}
+                  {a.video && expiree(a.video) && (
+                    <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
+                            onClick={() => { const courant = prodRef.current!; onMaj({ ...courant, articles: courant.articles.map(x => x.fichier === a.fichier ? { ...x, statut: "attente" as const, video: undefined, tache: undefined, erreur: undefined } : x) }); }}>
+                      Régénérer ce clip
+                    </button>
+                  )}
+                  {a.video && !expiree(a.video) && <video src={a.video} controls preload="metadata" style={{ width: 160, borderRadius: 8, background: "#000" }} />}
                   {vivants[a.fichier] && (() => {
                     const aJour = a.empreinte === vivants[a.fichier]!.empreinte;
                     const src = apercus[a.fichier] || (aJour ? a.apercuUrl : undefined);
@@ -474,7 +486,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                       </button>
                     );
                   })()}
-                  {a.video && <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
+                  {a.video && !expiree(a.video) && <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
                                  onClick={async () => {
                                    const blob = await blobDepuis(a.video!);
                                    if (!blob) { setErreur("Ce clip n'est plus disponible : l'adresse du moteur a expiré. Relancez la production pour ce passage."); return; }

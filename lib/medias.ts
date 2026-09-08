@@ -18,6 +18,16 @@ const HOTES_RELAYES = [/\.volces\.com$/, /\.bytepluses\.com$/, /\.byteplusapi\.c
 
 export const estDurable = (url: string | null | undefined) => Boolean(url && /\.supabase\.co\/storage\/v1\/object\/public\//.test(url));
 
+/** Une adresse signée du moteur a-t-elle expiré ? (X-Tos-Date + X-Tos-Expires, en secondes) */
+export function expiree(url: string | null | undefined): boolean {
+  if (!url || estDurable(url)) return false;
+  const d = url.match(/X-Tos-Date=(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/);
+  const e = url.match(/X-Tos-Expires=(\d+)/);
+  if (!d || !e) return false;
+  const debut = Date.UTC(+d[1], +d[2] - 1, +d[3], +d[4], +d[5], +d[6]);
+  return Date.now() > debut + Number(e[1]) * 1000;
+}
+
 /** Le contenu binaire d'une source : data-URI, adresse relayée, ou adresse directe. */
 export async function blobDepuis(source: string): Promise<Blob | null> {
   try {
