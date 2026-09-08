@@ -166,22 +166,22 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     const attente = prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente" && (!seulement || a.fichier === seulement.fichier));
     if (!attente.length) return;
     const sec = attente.reduce((t, c) => t + Math.max(4, Math.min(15, Math.round(c.duree))), 0);
-    if (!confirm(`Lancer ${attente.length} clip${attente.length > 1 ? "s" : ""} Seedance en ${prod.resolution} — ${sec} secondes, ordre de grandeur ${(sec * (TARIFS.video[prod.resolution] ?? 0.09)).toFixed(2)} $ ?`)) return;
+    if (!confirm(`Lancer ${attente.length} clip${attente.length > 1 ? "s" : ""} Seedance en ${resolution} — ${sec} secondes, ordre de grandeur ${(sec * (TARIFS.video[resolution] ?? 0.09)).toFixed(2)} $ ?`)) return;
     setLancement("en-cours"); setErreur(null);
     try {
       const r = await appelApi("/api/production", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resolution: prod.resolution, projet: projet.id, articles: attente.map(c => ({ n: c.n, fichier: c.fichier, prompt: c.prompt, mouvement: c.mouvement, image: c.image, duree: c.duree })) }),
+        body: JSON.stringify({ resolution, projet: projet.id, articles: attente.map(c => ({ n: c.n, fichier: c.fichier, prompt: c.prompt, mouvement: c.mouvement, image: c.image, duree: c.duree })) }),
       });
       const c = await lireJson(r);
       if (!r.ok) throw new Error(c.erreur || "Lancement impossible");
       const parN = new Map<number, { tache?: string; erreur?: string }>((c.resultats as any[]).map(x => [x.n, x]));
       const courant = prodRef.current!;
       const lances = new Set(attente.map(a => a.fichier));
-      onMaj({ ...courant, articles: courant.articles.map(a => {
+      onMaj({ ...courant, resolution: c.resolution || resolution, articles: courant.articles.map(a => {
         if (!lances.has(a.fichier)) return a;
         const x = parN.get(a.n);
-        return x?.tache ? { ...a, statut: "file" as const, tache: x.tache } : { ...a, statut: "echec" as const, erreur: x?.erreur || "Refusé" };
+        return x?.tache ? { ...a, statut: "file" as const, tache: x.tache, resolution: c.resolution || resolution } : { ...a, statut: "echec" as const, erreur: x?.erreur || "Refusé" };
       }) });
       setLancement("repos");
     } catch (e) { setLancement("erreur"); setErreur(e instanceof Error ? e.message : "Lancement impossible"); }
@@ -454,6 +454,9 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
           {prod.articles.some(a => a.moteur === "broll" && a.statut === "attente") && (
             <div className="pourquoi" style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <span>{prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente").length} clip{prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente").length > 1 ? "s" : ""} B-roll ajouté{prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente").length > 1 ? "s" : ""} depuis le lancement : ils partent chez Seedance sur ce clic, avec leur devis.</span>
+              <select className="champ" style={{ width: "auto", padding: "5px 10px", fontSize: 12.5 }} value={resolution} onChange={e => setResolution(e.target.value)} title="Résolution des clips à lancer">
+                {["480p", "720p", "1080p"].map(r => <option key={r} value={r}>{r} · ≈ {TARIFS.video[r].toFixed(2)} $/s</option>)}
+              </select>
               <button className="btn" style={{ padding: "6px 12px", fontSize: 12.5 }} disabled={lancement === "en-cours"} onClick={() => lancerAttente()}>
                 {lancement === "en-cours" ? "Envoi à Seedance…" : "Lancer ces clips"}
               </button>
@@ -466,7 +469,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                 <div>
                   <div className="mono" style={{ fontSize: 12.5 }}>{a.fichier}.{a.moteur === "broll" ? "mp4" : "mov"}</div>
                   <div className="muet" style={{ fontSize: 11.5, marginTop: 2 }}>
-                    {a.moteur === "broll" ? `B-roll · ${a.duree}s${a.image ? " · depuis la vignette validée" : " · depuis le prompt seul"}` : `Motion · ${(LIBELLES as any)[a.forme]?.nom || a.forme}${vivants[a.fichier] ? ` · ${vivants[a.fichier]!.duree} s · .mov ${modeDe(a) === "transparent" ? "à fond transparent" : "plein cadre"}` : ""}`}
+                    {a.moteur === "broll" ? `B-roll · ${a.duree}s${a.resolution ? ` · ${a.resolution}` : ""}${a.image ? " · depuis la vignette validée" : " · depuis le prompt seul"}` : `Motion · ${(LIBELLES as any)[a.forme]?.nom || a.forme}${vivants[a.fichier] ? ` · ${vivants[a.fichier]!.duree} s · .mov ${modeDe(a) === "transparent" ? "à fond transparent" : "plein cadre"}` : ""}`}
                     {a.erreur && !vivants[a.fichier] && <span style={{ color: a.statut === "echec" ? "var(--alerte)" : "var(--encre-3)" }}> — {a.erreur}</span>}
                   </div>
                 </div>
@@ -514,7 +517,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                     <button className="btn" style={{ padding: "7px 12px", fontSize: 12.5 }} disabled={lancement === "en-cours"}
                             title="Envoie ce clip à Seedance, avec l'image choisie en référence"
                             onClick={() => lancerAttente(a)}>
-                      {lancement === "en-cours" ? "Envoi…" : `Lancer ce clip · ≈ ${(Math.max(4, Math.min(15, Math.round(a.duree))) * (TARIFS.video[prod.resolution] ?? 0.09)).toFixed(2)} $`}
+                      {lancement === "en-cours" ? "Envoi…" : `Lancer ce clip · ${resolution} · ≈ ${(Math.max(4, Math.min(15, Math.round(a.duree))) * (TARIFS.video[resolution] ?? 0.09)).toFixed(2)} $`}
                     </button>
                   )}
                   {a.video && !expiree(a.video) && <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
