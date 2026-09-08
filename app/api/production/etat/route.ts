@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { configure, etatClip } from "@/lib/modelark";
 import { exiger } from "@/lib/garde";
+import { clientJeton, statutDe } from "@/lib/serveur-db";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +11,24 @@ export async function GET(req: Request) {
   if (!g.ok) return g.reponse;
   if (!configure()) return NextResponse.json({ erreur: "ARK_API_KEY absente." }, { status: 400 });
   const ids = (new URL(req.url).searchParams.get("ids") || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 60);
+  // Ce que la base sait déjà (rappel du moteur, cron, autre onglet) : pas besoin de redemander.
+  const sb = clientJeton(g.qui.jeton);
+  const connues = new Map<string, any>();
+  if (sb) {
+    const { data } = await sb.from("taches").select("id,statut,video,erreur").in("id", ids);
+    for (const t of data || []) connues.set(t.id, t);
+  }
   const etats = await Promise.all(ids.map(async id => {
+    const c = connues.get(id);
+    if (c && (c.statut === "pret" || c.statut === "echec")) {
+      return { id, statut: c.statut === "pret" ? "succeeded" : "failed", video: c.video, erreur: c.erreur };
+    }
     const r = await etatClip(id);
     if (!r.ok) return { id, statut: "inconnu", erreur: r.erreur };
     const t = r.data!;
+    if (sb && c && statutDe(t.status) !== c.statut) {
+      await sb.from("taches").update({ statut: statutDe(t.status), video: t.content?.video_url || c.video, erreur: t.error?.message || null, maj: new Date().toISOString() }).eq("id", id);
+    }
     return { id, statut: t.status, video: t.content?.video_url || null, erreur: t.error?.message || null };
   }));
   return NextResponse.json({ etats }, { headers: { "Cache-Control": "no-store" } });

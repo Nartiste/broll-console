@@ -107,7 +107,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     try {
       const r = await appelApi("/api/production", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resolution, articles: clips.map(c => ({ n: c.n, prompt: c.prompt, mouvement: c.mouvement, image: c.image, duree: c.duree })) }),
+        body: JSON.stringify({ resolution, projet: projet.id, articles: clips.map(c => ({ n: c.n, fichier: c.fichier, prompt: c.prompt, mouvement: c.mouvement, image: c.image, duree: c.duree })) }),
       });
       const c = await lireJson(r);
       if (!r.ok) throw new Error(c.erreur || "Lancement impossible");

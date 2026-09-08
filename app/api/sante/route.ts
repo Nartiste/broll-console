@@ -3,6 +3,7 @@ import { disponibles } from "@/lib/images";
 import { configure as arkConfigure } from "@/lib/modelark";
 import { configure as claudeConfigure } from "@/lib/anthropic";
 import { exiger, gardeConfiguree, PLAFONDS } from "@/lib/garde";
+import { serviceConfigure } from "@/lib/serveur-db";
 
 /**
  * Ce qui est branché et ce qui manque, aux noms exacts des variables.
@@ -26,7 +27,14 @@ export async function GET(req: Request) {
     manquant.push(`IMAGE_PROVIDER=« ${choisi} » inconnu — attendu : ${images.map(i => i.id).join(", ")}`);
   }
 
+  const suivi = {
+    comptes: gardeConfiguree(),
+    plafonds: PLAFONDS,
+    horsOnglet: serviceConfigure() && Boolean(process.env.CRON_SECRET),
+    manquant: [...(serviceConfigure() ? [] : ["SUPABASE_SERVICE_ROLE_KEY"]), ...(process.env.CRON_SECRET ? [] : ["CRON_SECRET"])],
+  };
   return NextResponse.json({
+    suivi,
     pret: manquant.length === 0,
     manquant,
     analyse: {

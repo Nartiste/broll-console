@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { configure, lancerClip } from "@/lib/modelark";
 import { depenser, exiger } from "@/lib/garde";
+import { clientJeton, origineSite, serviceConfigure } from "@/lib/serveur-db";
 import { TARIFS } from "@/lib/tarifs";
 
 export const maxDuration = 120;
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
   const g = await exiger(req);
   if (!g.ok) return g.reponse;
   if (!configure()) return NextResponse.json({ erreur: "ARK_API_KEY absente : aucun clip ne peut partir." }, { status: 400 });
-  const { articles, resolution } = await req.json().catch(() => ({}));
+  const { articles, resolution, projet } = await req.json().catch(() => ({}));
   if (!Array.isArray(articles) || !articles.length) {
     return NextResponse.json({ erreur: "Aucun clip à lancer." }, { status: 400 });
   }
@@ -29,6 +30,10 @@ export async function POST(req: Request) {
   const d = await depenser(g.qui, "production", secondes * TARIFS.video[res], `${lot.length} clips · ${secondes} s · ${res}`);
   if (!d.ok) return d.reponse;
   const resultats: { n: number; tache?: string; erreur?: string }[] = [];
+  // Le moteur rappelle le serveur quand un clip est fini — si le serveur a de quoi l'écrire.
+  const origine = origineSite();
+  const callback = serviceConfigure() && process.env.CRON_SECRET && origine ? `${origine}/api/production/callback?s=${process.env.CRON_SECRET}` : undefined;
+  const sb = clientJeton(g.qui.jeton);
   for (const a of lot) {
     if (typeof a?.prompt !== "string" || !a.prompt.trim()) { resultats.push({ n: a?.n, erreur: "Prompt vide." }); continue; }
     // L'image de référence fixe l'apparence ; le prompt vidéo doit dire ce qui
@@ -41,8 +46,13 @@ export async function POST(req: Request) {
       image: typeof a.image === "string" && /^https?:\/\//.test(a.image) ? a.image : undefined,
       duree: Number(a.duree) || 5,
       resolution: res,
+      callback,
     });
     resultats.push(r.ok ? { n: a.n, tache: r.data!.id } : { n: a.n, erreur: r.erreur });
+    if (r.ok && sb && typeof projet === "string") {
+      await sb.from("taches").insert({ id: r.data!.id, user_id: g.qui.id, projet, n: Number(a.n) || 0, fichier: String(a.fichier || `clip-${a.n}`).replace(/[^\w.-]+/g, "_"), statut: "file" })
+        .then(({ error }) => { if (error) console.warn("taches :", error.message); });
+    }
   }
   return NextResponse.json({ resolution: res, resultats });
 }
