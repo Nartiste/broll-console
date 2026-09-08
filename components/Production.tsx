@@ -135,6 +135,26 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
   // les gabarits se rendent, les B-roll attendent le bouton « Lancer ces clips ».
   useEffect(() => { if (nouveaux.length) ajouterNouveaux(); // eslint-disable-line react-hooks/exhaustive-deps
   }, [nouveaux.length]);
+  /* Tant qu'un article n'est pas parti (clip en attente, gabarit non lancé), il
+     suit la planche : moteur, variante, image de référence, prompt, mouvement.
+     Ce qui a été lancé reste ce qu'il est. */
+  useEffect(() => {
+    if (!prod) return;
+    let change = false;
+    const articles = prod.articles.map(a => {
+      if (a.tache || (a.moteur === "broll" && a.statut !== "attente")) return a;
+      const c = candidats.find(x => x.bloc === (a.bloc ?? insertDe(a)?.bloc));
+      if (!c) return a;
+      const suivi = { moteur: c.moteur, forme: c.forme, prompt: c.prompt, mouvement: c.mouvement, image: c.image, duree: c.duree,
+                      statut: c.moteur === "broll" ? "attente" as const : "pret" as const };
+      const differe = (Object.keys(suivi) as (keyof typeof suivi)[]).some(k => (a as any)[k] !== (suivi as any)[k]);
+      if (!differe) return a;
+      change = true;
+      return { ...a, ...suivi, video: undefined, erreur: undefined };
+    });
+    if (change) onMaj({ ...prod, articles });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidats, prod?.articles.length]);
   function ajouterNouveaux() {
     if (!prod || !nouveaux.length) return;
     const k0 = prod.articles.length;
@@ -466,6 +486,9 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                             onClick={() => { const courant = prodRef.current!; onMaj({ ...courant, articles: courant.articles.map(x => x.fichier === a.fichier ? { ...x, statut: "attente" as const, video: undefined, tache: undefined, erreur: undefined } : x) }); }}>
                       Régénérer ce clip
                     </button>
+                  )}
+                  {a.moteur === "broll" && !a.video && a.image && (
+                    <img src={a.image} alt="" title="L'image de référence choisie sur la planche : le clip lui ressemblera" style={{ width: 160, aspectRatio: "16/9", objectFit: "cover", borderRadius: 8, border: "1px solid var(--trait)" }} />
                   )}
                   {a.video && !expiree(a.video) && <video src={a.video} controls preload="metadata" style={{ width: 160, borderRadius: 8, background: "#000" }} />}
                   {vivants[a.fichier] && (() => {
