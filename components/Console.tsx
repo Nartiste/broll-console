@@ -9,6 +9,7 @@ import { troisPrompts } from "@/lib/images";
 import { Comp } from "./Vignette";
 import GabaritApercu from "./GabaritApercu";
 import { appelApi, lireJson } from "@/lib/api-client";
+import { ancrer } from "@/lib/medias";
 import { integre } from "@/lib/gabarits-integres";
 
 /** La consigne d'un clic : un gabarit sans mouvement propre en reçoit un. */
@@ -83,10 +84,14 @@ export default function Console({ initial }: { initial: Projet }) {
       });
       const c = await lireJson(r);
       if (!r.ok) throw new Error(c.erreur || "Génération impossible");
-      const images = (c.vignettes as any[]).map(v => (v.ok ? v.images?.[0]?.affichage || null : null));
+      const brutes = (c.vignettes as any[]).map(v => (v.ok ? v.images?.[0]?.affichage || null : null));
       const rate = (c.vignettes as any[]).find(v => !v.ok);
-      if (rate && images.every(x => !x)) throw new Error(rate.erreur || "Génération refusée");
+      if (rate && brutes.every(x => !x)) throw new Error(rate.erreur || "Génération refusée");
+      // Sur le compte, l'image reçoit une adresse durable — celle que la
+      // planche affiche et que le moteur vidéo prendra en référence.
+      const images = await Promise.all(brutes.map((src, k) => src ? ancrer(projet.id, `vignette-${ins.bloc}-${k}-${Date.now().toString(36)}.jpg`, src, "image/jpeg") : null));
       majDec(blocDe(n), { images });
+      if (rate) setGenErreur(`Une des trois images n'a pas pu être générée : ${rate.erreur || "refusée"}.`);
       setGeneration(g => { const { [n]: _, ...reste } = g; return reste; });
     } catch (e) {
       setGeneration(g => ({ ...g, [n]: "erreur" }));

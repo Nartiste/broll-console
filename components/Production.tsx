@@ -6,6 +6,7 @@ import { DUREE_ANIMATION, dureeDe, document as documentGabarit, type Gabarit } f
 import { TARIFS } from "@/lib/tarifs";
 import { cle, deposer, empreinte, enCache, recuperer, rendre, telecharger } from "@/lib/rendus";
 import { appelApi, lireJson } from "@/lib/api-client";
+import { ancrer, blobDepuis, estDurable } from "@/lib/medias";
 import type { ArticleProd, Decision, Production as Prod, Projet } from "@/lib/store";
 
 const slug = (t: string) =>
@@ -42,6 +43,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
   const [zip, setZip] = useState<"repos" | "en-cours">("repos");
   const [etapeZip, setEtapeZip] = useState("");
   const prod = projet.production;
+  const prodRef = useRef(prod); prodRef.current = prod;
 
   /* Ce qui partirait si on lançait maintenant — recalculé à chaque tri. */
   const candidats = useMemo<ArticleProd[]>(() => {
@@ -130,15 +132,24 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
         const c = await lireJson(r);
         if (arret || !r.ok) return;
         const parId = new Map<string, any>((c.etats as any[]).map(e => [e.id, e]));
+        const aAncrer: { fichier: string; url: string }[] = [];
         const articles = prod.articles.map(a => {
           const e = a.tache ? parId.get(a.tache) : null;
           if (!e) return a;
-          if (e.statut === "succeeded") return { ...a, statut: "pret" as const, video: e.video || a.video };
+          if (e.statut === "succeeded") { if (e.video && !estDurable(a.video)) aAncrer.push({ fichier: a.fichier, url: e.video }); return { ...a, statut: "pret" as const, video: e.video || a.video }; }
           if (e.statut === "failed" || e.statut === "cancelled") return { ...a, statut: "echec" as const, erreur: e.erreur || e.statut };
           if (e.statut === "running") return { ...a, statut: "en-cours" as const };
           return a;
         });
         onMaj({ ...prod, articles });
+        // Un clip prêt est recopié sur le compte : l'adresse du moteur expire en un jour.
+        for (const x of aAncrer) {
+          const durable = await ancrer(projet.id, `${x.fichier}.mp4`, x.url, "video/mp4");
+          if (durable !== x.url) {
+            const courant = prodRef.current;
+            if (courant) onMaj({ ...courant, articles: courant.articles.map(y => y.fichier === x.fichier ? { ...y, video: durable } : y) });
+          }
+        }
       } catch { /* on réessaie au prochain tick */ }
     };
     tick();
@@ -153,7 +164,6 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
   const [rendus, setRendus] = useState<Record<string, "en-cours" | "pret" | "echec" | undefined>>({});
   const [tour, setTour] = useState(0);
   const lances = useRef(new Set<string>());
-  const prodRef = useRef(prod); prodRef.current = prod;
   useEffect(() => {
     if (!prod) return;
     setRendus(q => {
@@ -220,13 +230,18 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       const JSZip = (await import("jszip")).default;
       const z = new JSZip();
       const timeline: string[] = [];
+      const manques: string[] = [];
       const timecode = (n: number) => { const i = plan.inserts.find(x => x.n === n); if (!i) return "     "; const t = i.entree; return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`; };
       for (const a of prod.articles) {
         if (a.statut === "pret" && a.video) {
-          const r = await appelApi(`/api/production/fichier?url=${encodeURIComponent(a.video)}&nom=${a.fichier}.mp4`);
-          if (r.ok) {
-            z.file(`01-TIMELINE/${a.fichier}.mp4`, await r.blob());
+          setEtapeZip(`${a.fichier}…`);
+          const blob = await blobDepuis(a.video);
+          if (blob) {
+            z.file(`01-TIMELINE/${a.fichier}.mp4`, blob);
             timeline.push(`${timecode(a.n)}  ${a.fichier}.mp4  ·  B-roll ${a.duree} s  ·  piste V2, en coupe sur le plan`);
+          } else {
+            timeline.push(`${timecode(a.n)}  ${a.fichier}.mp4  ·  B-roll  ·  CLIP INDISPONIBLE (adresse expirée) — relancez la production pour ce passage`);
+            manques.push(a.fichier);
           }
         } else if (vivants[a.fichier]) {
           setEtapeZip(`${a.fichier}…`);
@@ -261,6 +276,9 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob); a.download = `${slug(projet.titre)}-broll.zip`; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+      if (manques.length) setErreur(`Dossier livré sans ${manques.length} clip${manques.length > 1 ? "s" : ""} (${manques.join(", ")}) : adresse expirée. Relancez la production pour ces passages.`);
+    } catch (e) {
+      setErreur(`Le dossier n'a pas pu être assemblé : ${e instanceof Error ? e.message : "erreur"}.`);
     } finally { setZip("repos"); setEtapeZip(""); }
   }
 
@@ -335,9 +353,9 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                   {a.video && <video src={a.video} controls preload="metadata" style={{ width: 160, borderRadius: 8, background: "#000" }} />}
                   {a.video && <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
                                  onClick={async () => {
-                                   const r = await appelApi(`/api/production/fichier?url=${encodeURIComponent(a.video!)}&nom=${a.fichier}.mp4`);
-                                   if (!r.ok) { setErreur((await lireJson(r)).erreur || "Téléchargement impossible."); return; }
-                                   telecharger(await r.blob(), `${a.fichier}.mp4`);
+                                   const blob = await blobDepuis(a.video!);
+                                   if (!blob) { setErreur("Ce clip n'est plus disponible : l'adresse du moteur a expiré. Relancez la production pour ce passage."); return; }
+                                   telecharger(blob, `${a.fichier}.mp4`);
                                  }}>Télécharger .mp4</button>}
                   {vivants[a.fichier] && (
                     rendus[a.fichier] === "pret" ? (
