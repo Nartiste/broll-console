@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Plan } from "@/lib/analyse";
 import { DUREE_ANIMATION, dureeDe, document as documentGabarit, type Gabarit } from "@/lib/gabarits";
 import { TARIFS } from "@/lib/tarifs";
-import { cle, deposer, enCache, recuperer, rendre, telecharger } from "@/lib/rendus";
+import { cle, deposer, empreinte, enCache, recuperer, rendre, telecharger } from "@/lib/rendus";
 import type { ArticleProd, Decision, Production as Prod, Projet } from "@/lib/store";
 
 const slug = (t: string) =>
@@ -65,6 +65,29 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
         : { ...base, statut: "sans-objet" as const, erreur: "Forme inconnue : aucun gabarit ne sait la porter." };
     });
   }, [plan, dec, vars, gabaritPour]);
+
+  /* Un article motion n'est jamais figé : son HTML se recalcule à chaque fois
+     à partir du gabarit et du contenu actuels. Le gabarit change, le rendu suit. */
+  const vivant = (a: ArticleProd): { html: string; duree: number; empreinte: string } | null => {
+    if (a.moteur !== "motion") return null;
+    const g = gabaritPour(a.forme);
+    const i = plan.inserts.find(x => x.n === a.n);
+    if (g && i) {
+      const html = documentGabarit(g, i.params || {}, vars, false, { anime: true, transparent: true });
+      return { html, duree: dureeDe(g), empreinte: empreinte(html) };
+    }
+    return a.html ? { html: a.html, duree: a.dureeAnim || DUREE_ANIMATION, empreinte: empreinte(a.html) } : null;
+  };
+  const vivants = useMemo(() => {
+    const m: Record<string, ReturnType<typeof vivant>> = {};
+    for (const a of prod?.articles || []) m[a.fichier] = vivant(a);
+    return m;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prod?.articles, plan, vars, gabaritPour]);
+  const disponible = (a: ArticleProd) => {
+    const v = vivants[a.fichier];
+    return Boolean(v && (enCache(cle(projet.id, a.fichier), v.empreinte) || (a.movChemin && a.empreinte === v.empreinte)));
+  };
 
   const clips = candidats.filter(c => c.moteur === "broll");
   const secondes = clips.reduce((t, c) => t + Math.max(4, Math.min(15, Math.round(c.duree))), 0);
@@ -134,23 +157,24 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     if (!prod) return;
     setRendus(q => {
       const n = { ...q };
-      for (const a of prod.articles) if (a.html && (enCache(cle(projet.id, a.fichier)) || a.movChemin) && n[a.fichier] !== "en-cours") n[a.fichier] = "pret";
+      for (const a of prod.articles) if (vivants[a.fichier] && disponible(a) && n[a.fichier] !== "en-cours") n[a.fichier] = "pret";
       return n;
     });
-    const file = prod.articles.filter(a => a.html && !enCache(cle(projet.id, a.fichier)) && !a.movChemin && !lances.current.has(a.fichier));
+    const file = prod.articles.filter(a => vivants[a.fichier] && !disponible(a) && !lances.current.has(a.fichier));
     let i = 0;
     const suivant = async (): Promise<void> => {
       const a = file[i++];
-      if (!a || !a.html) return;
+      const v = a && vivants[a.fichier];
+      if (!a || !v) return;
       lances.current.add(a.fichier);
       setRendus(q => ({ ...q, [a.fichier]: "en-cours" }));
       try {
-        const f = await rendre(projet.id, { html: a.html, fichier: a.fichier, duree: a.dureeAnim || DUREE_ANIMATION });
+        const f = await rendre(projet.id, { html: v.html, fichier: a.fichier, duree: v.duree });
         setRendus(q => ({ ...q, [a.fichier]: "pret" }));
         const chemins = await deposer(projet.id, a.fichier, f);
         const courant = prodRef.current;
         if (chemins && courant) {
-          onMaj({ ...courant, articles: courant.articles.map(x => x.fichier === a.fichier ? { ...x, movChemin: chemins.mov, pngChemin: chemins.png } : x) });
+          onMaj({ ...courant, articles: courant.articles.map(x => x.fichier === a.fichier ? { ...x, movChemin: chemins.mov, pngChemin: chemins.png, empreinte: v.empreinte } : x) });
         }
       } catch {
         setRendus(q => ({ ...q, [a.fichier]: "echec" }));
@@ -159,20 +183,22 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       await suivant();
     };
     suivant();
-  }, [prod?.lancee, prod?.articles.length, tour]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prod?.lancee, prod?.articles.length, tour, vivants]);
 
   /** Les fichiers d'un gabarit : de la mémoire, sinon du compte, sinon rendus maintenant. */
   async function fichiersDe(a: ArticleProd): Promise<{ mov: Blob; png?: Blob; zip?: Blob } | null> {
-    const c = enCache(cle(projet.id, a.fichier));
+    const v = vivants[a.fichier];
+    if (!v) return null;
+    const c = enCache(cle(projet.id, a.fichier), v.empreinte);
     if (c) return c;
-    if (a.movChemin) {
+    if (a.movChemin && a.empreinte === v.empreinte) {
       const mov = await recuperer(a.movChemin);
       if (mov) return { mov, png: a.pngChemin ? (await recuperer(a.pngChemin)) || undefined : undefined };
     }
-    if (!a.html) return null;
     setRendus(q => ({ ...q, [a.fichier]: "en-cours" }));
     try {
-      const f = await rendre(projet.id, { html: a.html, fichier: a.fichier, duree: a.dureeAnim || DUREE_ANIMATION });
+      const f = await rendre(projet.id, { html: v.html, fichier: a.fichier, duree: v.duree });
       setRendus(q => ({ ...q, [a.fichier]: "pret" }));
       return f;
     } catch {
@@ -201,11 +227,11 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
             z.file(`01-TIMELINE/${a.fichier}.mp4`, await r.blob());
             timeline.push(`${timecode(a.n)}  ${a.fichier}.mp4  ·  B-roll ${a.duree} s  ·  piste V2, en coupe sur le plan`);
           }
-        } else if (a.html) {
+        } else if (vivants[a.fichier]) {
           setEtapeZip(`${a.fichier}…`);
           const f = await fichiersDe(a);
           if (!f) {
-            z.file(`03-SOURCES/${a.fichier}/${a.fichier}.html`, a.html);
+            z.file(`03-SOURCES/${a.fichier}/${a.fichier}.html`, vivants[a.fichier]!.html);
             timeline.push(`${timecode(a.n)}  ${a.fichier}  ·  motion  ·  RENDU IMPOSSIBLE, HTML dans 03-SOURCES`);
             continue;
           }
@@ -218,7 +244,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
               z.file(`03-SOURCES/${x.name}`, await x.async("blob"));
             }));
           }
-          timeline.push(`${timecode(a.n)}  ${a.fichier}.mov  ·  motion ${a.dureeAnim || DUREE_ANIMATION} s  ·  piste V3, PAR-DESSUS le plan (fond transparent)`);
+          timeline.push(`${timecode(a.n)}  ${a.fichier}.mov  ·  motion ${vivants[a.fichier]!.duree} s  ·  piste V3, PAR-DESSUS le plan (fond transparent)`);
         }
       }
       z.file("00-LISEZMOI.txt",
@@ -286,7 +312,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
             <span>{prod.resolution}</span>
             <span>{prets} prêt{prets > 1 ? "s" : ""}</span>
             <span>{enCours} en cours{enCours ? " · vérification toutes les 10 s" : ""}</span>
-            {prod.articles.some(a => a.html) && <span>gabarits rendus {prod.articles.filter(a => a.html && rendus[a.fichier] === "pret").length}/{prod.articles.filter(a => a.html).length}</span>}
+            {prod.articles.some(a => vivants[a.fichier]) && <span>gabarits rendus {prod.articles.filter(a => vivants[a.fichier] && rendus[a.fichier] === "pret").length}/{prod.articles.filter(a => vivants[a.fichier]).length}</span>}
           </div>
           <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
             {prod.articles.map(a => (
@@ -295,20 +321,20 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                 <div>
                   <div className="mono" style={{ fontSize: 12.5 }}>{a.fichier}.{a.moteur === "broll" ? "mp4" : "mov"}</div>
                   <div className="muet" style={{ fontSize: 11.5, marginTop: 2 }}>
-                    {a.moteur === "broll" ? `B-roll · ${a.duree}s${a.image ? " · depuis la vignette validée" : " · depuis le prompt seul"}` : `Motion · ${a.forme}${a.html ? ` · ${a.dureeAnim || DUREE_ANIMATION} s · .mov à fond transparent` : ""}`}
-                    {a.erreur && <span style={{ color: a.statut === "echec" ? "var(--alerte)" : "var(--encre-3)" }}> — {a.erreur}</span>}
+                    {a.moteur === "broll" ? `B-roll · ${a.duree}s${a.image ? " · depuis la vignette validée" : " · depuis le prompt seul"}` : `Motion · ${a.forme}${vivants[a.fichier] ? ` · ${vivants[a.fichier]!.duree} s · .mov à fond transparent` : ""}`}
+                    {a.erreur && !vivants[a.fichier] && <span style={{ color: a.statut === "echec" ? "var(--alerte)" : "var(--encre-3)" }}> — {a.erreur}</span>}
                   </div>
                 </div>
                 {(() => {
-                  const e = a.html ? (rendus[a.fichier] === "pret" ? "pret" : rendus[a.fichier] === "echec" ? "echec" : "en-cours") : a.statut;
-                  const [texte, couleur] = e === "en-cours" && a.html ? ["rendu…", "var(--signal)"] : PILULE[e];
+                  const e = vivants[a.fichier] ? (rendus[a.fichier] === "pret" ? "pret" : rendus[a.fichier] === "echec" ? "echec" : "en-cours") : a.statut;
+                  const [texte, couleur] = e === "en-cours" && vivants[a.fichier] ? ["rendu…", "var(--signal)"] : PILULE[e];
                   return <span className="pilule" style={{ justifySelf: "start", color: couleur, borderColor: couleur }}>{texte}</span>;
                 })()}
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   {a.video && <video src={a.video} controls preload="metadata" style={{ width: 160, borderRadius: 8, background: "#000" }} />}
                   {a.video && <a className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
                                  href={`/api/production/fichier?url=${encodeURIComponent(a.video)}&nom=${a.fichier}.mp4`}>Télécharger</a>}
-                  {a.html && (
+                  {vivants[a.fichier] && (
                     rendus[a.fichier] === "pret" ? (
                       <>
                         <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
@@ -331,7 +357,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
             ))}
           </div>
           <div style={{ display: "flex", gap: 10, marginTop: 14, alignItems: "center", flexWrap: "wrap" }}>
-            <button className="btn" disabled={zip === "en-cours" || (prets === 0 && !prod.articles.some(a => a.html))} onClick={telechargerDossier}>
+            <button className="btn" disabled={zip === "en-cours" || (prets === 0 && !prod.articles.some(a => vivants[a.fichier]))} onClick={telechargerDossier}>
               {zip === "en-cours" ? (etapeZip || "Assemblage du dossier…") : "Télécharger le dossier"}
             </button>
             <span className="muet" style={{ fontSize: 12.5 }}>01-TIMELINE (un fichier par insert, dans l'ordre), 02-IMAGES-FIXES, 03-SOURCES, et un LISEZMOI avec l'ordre de montage. Les fichiers déjà rendus ne sont pas refaits.</span>

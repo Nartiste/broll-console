@@ -12,11 +12,22 @@ import { supabase } from "./supabase";
  * compte (rendus/<utilisateur>/<projet>/<fichier>), d'où il revient sur
  * n'importe quel appareil.
  */
-export interface FichiersRendu { mov: Blob; png?: Blob; zip: Blob }
+export interface FichiersRendu { mov: Blob; png?: Blob; zip: Blob; empreinte: string }
 
 const CACHE = new Map<string, FichiersRendu>();
 export const cle = (projetId: string, fichier: string) => `${projetId}/${fichier}`;
-export const enCache = (k: string) => CACHE.get(k);
+/** Le rendu en mémoire, s'il correspond encore au HTML courant. */
+export const enCache = (k: string, empreinteAttendue: string) => {
+  const f = CACHE.get(k);
+  return f && f.empreinte === empreinteAttendue ? f : undefined;
+};
+
+/** Une empreinte courte du HTML : deux gabarits différents, deux rendus différents. */
+export function empreinte(html: string): string {
+  let h = 5381;
+  for (let i = 0; i < html.length; i++) h = ((h << 5) + h + html.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36) + html.length.toString(36);
+}
 
 /** Fait rendre le gabarit par le serveur et en tire les fichiers utiles. */
 export async function rendre(projetId: string, a: { html: string; fichier: string; duree: number }): Promise<FichiersRendu> {
@@ -33,7 +44,7 @@ export async function rendre(projetId: string, a: { html: string; fichier: strin
   const mov = await z.file(alpha ? `${a.fichier}_alpha.mov` : `${a.fichier}.mov`)?.async("blob");
   if (!mov) throw new Error("Le rendu ne contient pas de vidéo");
   const png = await z.file(alpha ? `${a.fichier}_alpha.png` : `${a.fichier}.png`)?.async("blob");
-  const f: FichiersRendu = { mov: mov.slice(0, mov.size, "video/quicktime"), png, zip };
+  const f: FichiersRendu = { mov: mov.slice(0, mov.size, "video/quicktime"), png, zip, empreinte: empreinte(a.html) };
   CACHE.set(cle(projetId, a.fichier), f);
   return f;
 }

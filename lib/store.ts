@@ -48,6 +48,7 @@ export interface ArticleProd {
   dureeAnim?: number;       // durée du mouvement du gabarit (s)
   movChemin?: string;       // le .mov rendu, déposé sur le compte (chemin de stockage)
   pngChemin?: string;       // l'image fixe, idem
+  empreinte?: string;       // empreinte du HTML rendu : si le gabarit change, on re-rend
 }
 
 export interface Production {
