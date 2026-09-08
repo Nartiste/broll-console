@@ -91,18 +91,18 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     if (articles.some((a, k) => a.bloc !== prod.articles[k].bloc)) onMaj({ ...prod, articles });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prod?.lancee, plan]);
-  /* Le mode de rendu : « plein » ressemble à l'aperçu, fond compris ; « transparent »
-     ne garde que le composant, à poser sur le plan face caméra. */
-  // Transparent par défaut : un motion se pose sur le plan face caméra.
-  const mode: ModeRendu = prod?.mode || "transparent";
-  const changerMode = (m: ModeRendu) => { if (prod) onMaj({ ...prod, mode: m }); };
+  /* La variante choisie sur la planche dit tout : A fond clair, B fond sombre,
+     C fond transparent (le composant seul, à poser sur le plan face caméra). */
+  const CARTES = ["clair", "sombre", "clair"] as const;
+  const modeDe = (a: ArticleProd): ModeRendu => { const i = insertDe(a); return i && dec(i.bloc).variante === 2 ? "transparent" : "plein"; };
   const vivant = (a: ArticleProd): { html: string; duree: number; empreinte: string } | null => {
     if (a.moteur !== "motion") return null;
     const g = gabaritPour(a.forme);
     const i = insertDe(a);
+    const mode = modeDe(a);
     if (g && i) {
       const d = dec(i.bloc);
-      const variante = (["clair", "sombre", "inverse"] as const)[d.variante] || "clair";
+      const variante = CARTES[d.variante] || "clair";
       // Un passage dont l'analyse n'a pas donné les paramètres de cette forme
       // (moteur ou forme changés après coup) reçoit une lecture de son texte.
       // Les paramètres de l'analyse ne valent que pour la forme qu'elle avait choisie :
@@ -118,7 +118,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     for (const a of prod?.articles || []) m[a.fichier] = vivant(a);
     return m;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prod?.articles, plan, vars, gabaritPour, mode]);
+  }, [prod?.articles, plan, vars, gabaritPour, projet.decisions]);
   const disponible = (a: ArticleProd) => {
     const v = vivants[a.fichier];
     return Boolean(v && (enCache(cle(projet.id, a.fichier), v.empreinte) || (a.movChemin && a.empreinte === v.empreinte)));
@@ -240,7 +240,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
   /* L'aperçu vidéo de chaque gabarit rendu : en mémoire dans l'onglet, sinon sur le compte. */
   const [apercus, setApercus] = useState<Record<string, string>>({});
   const [affiches, setAffiches] = useState<Record<string, string>>({});
-  const [grand, setGrand] = useState<{ fichier: string; src?: string; affiche?: string; gabarit?: Gabarit; params: Record<string, any>; variante: "clair" | "sombre" | "inverse" } | null>(null);
+  const [grand, setGrand] = useState<{ fichier: string; src?: string; affiche?: string; gabarit?: Gabarit; params: Record<string, any>; variante: "clair" | "sombre" | "inverse"; transparent: boolean } | null>(null);
   const [tour, setTour] = useState(0);
   const lances = useRef(new Set<string>());
   useEffect(() => {
@@ -259,7 +259,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       lances.current.add(a.fichier);
       setRendus(q => ({ ...q, [a.fichier]: "en-cours" }));
       try {
-        const f = await rendre(projet.id, { html: v.html, fichier: a.fichier, duree: v.duree, mode });
+        const f = await rendre(projet.id, { html: v.html, fichier: a.fichier, duree: v.duree, mode: modeDe(a) });
         setRendus(q => ({ ...q, [a.fichier]: "pret" }));
         if (f.png) setAffiches(q => ({ ...q, [a.fichier]: URL.createObjectURL(f.png!) }));
         if (f.apercu) setApercus(q => ({ ...q, [a.fichier]: URL.createObjectURL(f.apercu!) }));
@@ -292,7 +292,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     }
     setRendus(q => ({ ...q, [a.fichier]: "en-cours" }));
     try {
-      const f = await rendre(projet.id, { html: v.html, fichier: a.fichier, duree: v.duree, mode });
+      const f = await rendre(projet.id, { html: v.html, fichier: a.fichier, duree: v.duree, mode: modeDe(a) });
       setRendus(q => ({ ...q, [a.fichier]: "pret" }));
       return f;
     } catch (e) {
@@ -343,7 +343,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
               z.file(`03-SOURCES/${x.name}`, await x.async("blob"));
             }));
           }
-          timeline.push(`${timecode(a)}  ${a.fichier}.mov  ·  motion ${vivants[a.fichier]!.duree} s  ·  ${mode === "transparent" ? "piste V3, PAR-DESSUS le plan (fond transparent)" : "piste V2, en coupe sur le plan (plein cadre, comme l'aperçu)"}`);
+          timeline.push(`${timecode(a)}  ${a.fichier}.mov  ·  motion ${vivants[a.fichier]!.duree} s  ·  ${modeDe(a) === "transparent" ? "piste V3, PAR-DESSUS le plan (fond transparent)" : "piste V2, en coupe sur le plan (plein cadre)"}`);
         }
       }
       z.file("00-LISEZMOI.txt",
@@ -422,18 +422,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
             <span>{enCours} en cours{enCours ? " · vérification toutes les 10 s" : ""}</span>
             {prod.articles.some(a => vivants[a.fichier]) && <span>gabarits rendus {prod.articles.filter(a => vivants[a.fichier] && rendus[a.fichier] === "pret").length}/{prod.articles.filter(a => vivants[a.fichier]).length}</span>}
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
-            <span className="eyebrow" style={{ marginRight: 4 }}>Rendu des gabarits</span>
-            <button className="pilule" aria-pressed={mode === "transparent"} style={mode === "transparent" ? { borderColor: "var(--accent)", color: "var(--accent)" } : undefined}
-                    onClick={() => changerMode("transparent")} title="Seul le composant est rendu, sans le fond du gabarit. Se superpose à votre plan face caméra.">
-              Fond transparent, à superposer
-            </button>
-            <button className="pilule" aria-pressed={mode === "plein"} style={mode === "plein" ? { borderColor: "var(--accent)", color: "var(--accent)" } : undefined}
-                    onClick={() => changerMode("plein")} title="Le fichier ressemble à l'aperçu de la planche, fond compris. Se pose en coupe, comme un B-roll.">
-              Comme l'aperçu, plein cadre
-            </button>
-            <span className="muet" style={{ fontSize: 12 }}>Changer de mode relance les rendus.</span>
-          </div>
+
           {nouveaux.length > 0 && (
             <div className="pourquoi" style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <span>{nouveaux.length > 1 ? `${nouveaux.length} inserts gardés depuis le lancement ne sont pas dans cette production.` : "1 insert gardé depuis le lancement n'est pas dans cette production."}</span>
@@ -455,7 +444,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                 <div>
                   <div className="mono" style={{ fontSize: 12.5 }}>{a.fichier}.{a.moteur === "broll" ? "mp4" : "mov"}</div>
                   <div className="muet" style={{ fontSize: 11.5, marginTop: 2 }}>
-                    {a.moteur === "broll" ? `B-roll · ${a.duree}s${a.image ? " · depuis la vignette validée" : " · depuis le prompt seul"}` : `Motion · ${(LIBELLES as any)[a.forme]?.nom || a.forme}${vivants[a.fichier] ? ` · ${vivants[a.fichier]!.duree} s · .mov ${mode === "transparent" ? "à fond transparent" : "plein cadre"}` : ""}`}
+                    {a.moteur === "broll" ? `B-roll · ${a.duree}s${a.image ? " · depuis la vignette validée" : " · depuis le prompt seul"}` : `Motion · ${(LIBELLES as any)[a.forme]?.nom || a.forme}${vivants[a.fichier] ? ` · ${vivants[a.fichier]!.duree} s · .mov ${modeDe(a) === "transparent" ? "à fond transparent" : "plein cadre"}` : ""}`}
                     {a.erreur && !vivants[a.fichier] && <span style={{ color: a.statut === "echec" ? "var(--alerte)" : "var(--encre-3)" }}> — {a.erreur}</span>}
                   </div>
                 </div>
@@ -472,13 +461,14 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                     const affiche = affiches[a.fichier] || (aJour ? a.fixeUrl : undefined);
                     const g = gabaritPour(a.forme); const ins = insertDe(a);
                     const params = ins ? (ins.forme === a.forme && ins.params && Object.keys(ins.params).length ? ins.params : paramsPour(a.forme as any, ins.texte, ins.section)) : {};
-                    const variante = ins ? ((["clair", "sombre", "inverse"] as const)[dec(ins.bloc).variante] || "clair") : "clair";
+                    const variante = ins ? (CARTES[dec(ins.bloc).variante] || "clair") : "clair";
+                    const transparent = modeDe(a) === "transparent";
                     // L'aperçu montre l'état final, lisible ; un clic ouvre le lecteur en grand.
                     return (
                       <button className="apercu-rendu" title={src ? "Voir le rendu en grand" : "Le rendu arrive — état final du gabarit"}
-                              onClick={() => setGrand({ fichier: a.fichier, src, affiche, gabarit: g, params, variante })}>
+                              onClick={() => setGrand({ fichier: a.fichier, src, affiche, gabarit: g, params, variante, transparent })}>
                         {affiche ? <img src={affiche} alt="" />
-                          : g && ins ? <div className="vignette"><GabaritApercu gabarit={g} params={params} vars={vars} variante={variante} transparent={mode === "transparent"} /></div> : null}
+                          : g && ins ? <div className="vignette"><GabaritApercu gabarit={g} params={params} vars={vars} variante={variante} transparent={transparent} /></div> : null}
                         <span className="lecture">{src ? "▶" : "…"}</span>
                       </button>
                     );
@@ -530,12 +520,12 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
           <div className="grand" onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
               <b className="mono" style={{ fontSize: 13 }}>{grand.fichier}.mov</b>
-              <span className="muet" style={{ fontSize: 12.5 }}>{grand.src ? (mode === "transparent" ? "le rendu, posé sur un gris neutre pour voir la transparence" : "le rendu, tel qu'il sera livré") : "le gabarit tel qu'il sera rendu (survoler pour rejouer le mouvement)"}</span>
+              <span className="muet" style={{ fontSize: 12.5 }}>{grand.src ? (grand.transparent ? "le rendu, posé sur un gris neutre pour voir la transparence" : "le rendu, tel qu'il sera livré") : "le gabarit tel qu'il sera rendu (survoler pour rejouer le mouvement)"}</span>
               <button className="btn fantome" style={{ marginLeft: "auto", padding: "6px 12px", fontSize: 12.5 }} onClick={() => setGrand(null)}>Fermer</button>
             </div>
             {grand.src
               ? <video src={grand.src} poster={grand.affiche} controls autoPlay playsInline style={{ width: "100%", aspectRatio: "16/9", borderRadius: 10, background: "#3c3f3a" }} />
-              : grand.gabarit ? <div className="vignette" style={{ borderRadius: 10 }}><GabaritApercu gabarit={grand.gabarit} params={grand.params} vars={vars} variante={grand.variante} anime transparent={mode === "transparent"} /></div> : null}
+              : grand.gabarit ? <div className="vignette" style={{ borderRadius: 10 }}><GabaritApercu gabarit={grand.gabarit} params={grand.params} vars={vars} variante={grand.variante} anime transparent={grand.transparent} /></div> : null}
           </div>
         </div>
       )}
