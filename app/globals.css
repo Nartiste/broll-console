@@ -210,6 +210,7 @@ input[type=range]::-moz-range-thumb {
 .ruban-legende { display: flex; gap: 16px; margin-top: 8px; font-family: var(--mono); font-size: 10.5px; color: var(--encre-2); flex-wrap: wrap; align-items: center; }
 .puce { width: 9px; height: 9px; border-radius: 3px; display: inline-block; margin-right: 5px; vertical-align: -1px; }
 kbd { font-family: var(--mono); font-size: 10px; background: var(--surface-3); border-radius: 4px; padding: 2px 5px; }
+[aria-pressed="true"] kbd { background: rgba(0, 0, 0, .22); color: inherit; }
 
 /* cartes d'insert */
 .planche { display: grid; gap: 14px; margin-top: 20px; }
@@ -309,3 +310,29 @@ pre { background: var(--fond); border: 1px solid var(--trait); border-radius: 12
 .forme .vignette { border-radius: 0; }
 .forme b { font-size: 13.5px; padding: 9px 11px 0; }
 .forme span { font-size: 11.5px; color: var(--encre-2); padding: 3px 11px 0; line-height: 1.4; }
+
+
+/* ---- petits écrans : la planche se trie au pouce ---- */
+@media (max-width: 900px) {
+  .flanc { display: flex; flex-direction: row; align-items: center; gap: 14px; padding: 10px 16px; }
+  .flanc > p { display: none; }
+  .flanc .marque { white-space: nowrap; }
+  .flanc nav { display: flex; }
+  .flanc .bas { margin: 0 0 0 auto; border: 0; padding: 0; }
+  .flanc .compte > div > div:first-child { max-width: 140px; }
+  .panneau { padding: 16px 14px 120px; }
+  .panneau > header h1 { font-size: 22px; }
+  .panneau > header .chiffres { font-size: 11px; }
+  .ruban-zone { padding: 8px 0; }
+  .ruban { height: 28px; }
+  .ruban-legende { display: none; }
+  .sortie { padding: 10px 14px; gap: 8px; }
+  .sortie .compte { font-size: 11px; gap: 10px; }
+  .sortie .droite { width: 100%; }
+  .sortie .droite .btn { flex: 1; justify-content: center; }
+}
+@media (max-width: 640px) {
+  .variantes { grid-template-columns: 1fr; }
+  .variante .vignette { width: 100%; }
+  .etapes button { flex: 1; justify-content: center; }
+}

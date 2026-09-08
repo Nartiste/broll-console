@@ -40,12 +40,13 @@ export default function Projets() {
             const mo = plan.inserts.length - br;
             const tranches = Object.values(p.decisions).filter(d => d.etat).length;
             return (
-              <Link key={p.id} href={`/studio/${p.id}`}>
+              <div key={p.id} style={{ display: "grid" }}>
+              <Link href={`/studio/${p.id}`}>
                 <article className="carte">
                   <h3>{p.titre}</h3>
                   <div className="barre">
-                    <i style={{ width: `${(br / plan.inserts.length) * 100}%`, background: "var(--encre-2)" }} />
-                    <i style={{ width: `${(mo / plan.inserts.length) * 100}%`, background: "var(--accent)" }} />
+                    <i style={{ width: `${plan.inserts.length ? (br / plan.inserts.length) * 100 : 0}%`, background: "var(--encre-2)" }} />
+                    <i style={{ width: `${plan.inserts.length ? (mo / plan.inserts.length) * 100 : 0}%`, background: "var(--accent)" }} />
                   </div>
                   <div className="chiffres mono">
                     <span>{plan.inserts.length} inserts</span>
@@ -56,19 +57,20 @@ export default function Projets() {
                     <span>{Math.floor(plan.script.duree / 60)}:{String(Math.round(plan.script.duree % 60)).padStart(2, "0")} · {plan.script.mots} mots</span>
                     <span>{tranches}/{plan.inserts.length} tranchés</span>
                   </div>
-                  <button
-                    className="pilule"
-                    style={{ justifySelf: "start" }}
-                    onClick={e => {
-                      e.preventDefault();
-                      supprimer(p.id);
-                      setListe(projets());
-                    }}
-                  >
-                    Supprimer
-                  </button>
                 </article>
               </Link>
+              <button
+                className="pilule"
+                style={{ justifySelf: "start", marginTop: 6 }}
+                onClick={() => {
+                  if (!confirm(`Supprimer « ${p.titre} » ? Ses décisions, sa charte et sa production disparaissent, ici et sur le compte.`)) return;
+                  supprimer(p.id);
+                  setListe(projets());
+                }}
+              >
+                Supprimer
+              </button>
+              </div>
             );
           })}
         </div>

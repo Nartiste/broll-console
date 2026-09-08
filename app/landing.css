@@ -191,3 +191,10 @@
 .landing footer { border-top: 1px solid var(--l-trait); padding: 26px 0 40px; display: flex; gap: 18px; flex-wrap: wrap; align-items: center; color: var(--l-muet); font-size: 13px; }
 .landing footer a { text-decoration: none; }
 .landing footer .l-fin { margin-left: auto; display: flex; gap: 16px; }
+
+@media (max-width: 560px) {
+  .landing .l-nav .l-droite .ghost { display: none; }
+  .landing .l-nav .l-tag small { display: none; }
+  .landing .l-btn { white-space: nowrap; }
+  .landing .l-hero h1 { font-size: clamp(30px, 9vw, 44px); }
+}

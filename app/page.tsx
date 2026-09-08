@@ -49,7 +49,7 @@ export default function Accueil() {
               <span className="l-num">2</span>
               <b>Validez la planche</b>
               <span>Trois propositions par insert. Vous gardez, vous ajustez, vous écartez — au clavier.</span>
-              <Link href="/studio" className="l-btn blanc">Voir un exemple</Link>
+              <Link href="/studio?exemple=1" className="l-btn blanc">Voir un exemple</Link>
             </div>
             <div>
               <span className="l-num">3</span>
@@ -67,7 +67,7 @@ export default function Accueil() {
             <span className="l-eyebrow">Ce qui sort de la console</span>
             <h2>Des images, pas des promesses</h2>
           </div>
-          <Link href="/studio" className="l-btn ghost">Essayer sur un script d&apos;exemple</Link>
+          <Link href="/studio?exemple=1" className="l-btn ghost">Essayer sur un script d&apos;exemple</Link>
         </div>
         <div className="l-galerie">
           <figure className="l-carte">
@@ -192,7 +192,7 @@ export default function Accueil() {
 
       <footer className="l-in">
         <span>Console B-roll</span>
-        <span className="mono">v0.2</span>
+        <span className="mono">v0.1</span>
         <div className="l-fin">
           <a href="https://github.com/Nartiste/broll-console">Code source</a>
           <Link href="/login">Se connecter</Link>

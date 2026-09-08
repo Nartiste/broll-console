@@ -34,6 +34,10 @@ export default function Console({ initial }: { initial: Projet }) {
     return e === 2 || e === 3 ? e : 1;
   });
   const [vise, setVise] = useState(1);
+  useEffect(() => {
+    const u = new URL(window.location.href);
+    if (u.searchParams.get("etape") !== String(porte)) { u.searchParams.set("etape", String(porte)); window.history.replaceState(null, "", u.toString()); }
+  }, [porte]);
   const [charge, setCharge] = useState<string | null>(null);
   /* Le panneau de production s'ouvre de lui-même quand une production existe, et se ferme quand on le demande. */
   const [prodOuverte, setProdOuverte] = useState(() => Boolean(projet.production));

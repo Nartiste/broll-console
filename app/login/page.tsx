@@ -75,6 +75,7 @@ export default function Connexion() {
                      placeholder="vous@studio.fr" value={email}
                      onChange={e => setEmail(e.target.value)} />
             </div>
+            {!authConfiguree() && <p style={{ color: "var(--signal)", fontSize: 13 }}>Les comptes ne sont pas activés sur ce déploiement : continuez sans compte, vos projets restent dans ce navigateur.</p>}
             <button className="btn" type="submit" disabled={etat === "envoi" || !authConfiguree()}>
               {etat === "envoi" ? "Envoi…" : "Recevoir le lien"}
             </button>

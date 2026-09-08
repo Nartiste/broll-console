@@ -11,7 +11,7 @@ import { appelApi, lireJson } from "@/lib/api-client";
  */
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRef, useState , useEffect} from "react";
 import { creer } from "@/lib/store";
 
 const EXEMPLE = `Est-ce que vous vous êtes déjà demandé
@@ -163,8 +163,13 @@ export default function Depot({ compact = false }: { compact?: boolean }) {
 
   function ouvrirExemple() {
     const p = creer(EXEMPLE, "Script d'exemple");
-    router.push(`/studio/${p.id}`);
+    router.push(`/studio/${p.id}?etape=3`);
   }
+  // Arrivée depuis « Voir un exemple » : l'exemple s'ouvre sans un clic de plus.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("exemple") === "1") ouvrirExemple();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div
