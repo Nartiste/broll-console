@@ -103,10 +103,10 @@ export async function POST(req: Request) {
     .replace(/<link\b[^>]*>/gi, l => /href="https:\/\/fonts\.googleapis\.com\/css2\?[^"]*"/.test(l) && /rel="stylesheet"/.test(l) ? l : "");
   const d = await depenser(g.qui, "rendu", COUTS.rendu, String(nom || ""));
   if (!d.ok) return d.reponse;
-  return auTour(() => rendreTout({ html, nom, fps, duree, fixe, alpha, sequence: corpsReq.sequence === true }));
+  return auTour(() => rendreTout({ html, nom, fps, duree, fixe, alpha, sequence: corpsReq.sequence === true, plein: corpsReq.plein === true }));
 }
 
-async function rendreTout({ html, nom, fps, duree, fixe, alpha, sequence }: { html: string; nom: unknown; fps: number; duree: number; fixe: boolean; alpha: unknown; sequence: boolean }) {
+async function rendreTout({ html, nom, fps, duree, fixe, alpha, sequence, plein }: { html: string; nom: unknown; fps: number; duree: number; fixe: boolean; alpha: unknown; sequence: boolean; plein: boolean }) {
   const base = String(nom || "gabarit").replace(/[^\w.-]+/g, "_");
   const images = Math.max(1, Math.min(240, Math.round(Number(fps) * Number(duree))));
 
@@ -159,11 +159,14 @@ async function rendreTout({ html, nom, fps, duree, fixe, alpha, sequence }: { ht
         zip.file(`${base}${suffixe}.png`, await page.screenshot({ type: "png", omitBackground: true, optimizeForSpeed: true }));
       }
     };
-    await capturer("");
-    // Le gabarit peint tout le cadre ? Son PNG est opaque. On rend aussi une
-    // version sans ce fond — celle qui se superpose au plan dans le montage.
+    // Le gabarit peint tout le cadre ? Son rendu serait opaque. On rend alors
+    // la version SANS ce fond — celle qui se superpose au plan dans le montage —
+    // et la version plein cadre seulement si on la demande : chaque passe
+    // coûte une minute de capture et un fichier de plusieurs dizaines de Mo.
+    const peintLeFond = alpha !== false && /\.g\s*\{[^}]*\bbackground/.test(html);
     let avecAlpha = false;
-    if (alpha !== false && /\.g\s*\{[^}]*\bbackground/.test(html)) {
+    if (!peintLeFond || plein) await capturer("");
+    if (peintLeFond) {
       await page.addStyleTag({ content: ".g{background:transparent!important;box-shadow:none!important}" });
       await capturer("_alpha");
       avecAlpha = true;
@@ -177,7 +180,7 @@ async function rendreTout({ html, nom, fps, duree, fixe, alpha, sequence }: { ht
         `Vidéo ${fps} i/s, ${duree} s, 1920×1080, QuickTime codec PNG avec canal alpha.`,
         `Premiere / After Effects : importez-le comme n'importe quelle vidéo. Rien d'autre à cocher.`,
         "");
-      if (avecAlpha) lisezmoi.push(`${base}.mov : la même animation avec le fond plein du gabarit, en carte plein cadre.`, "");
+      if (avecAlpha && plein) lisezmoi.push(`${base}.mov : la même animation avec le fond plein du gabarit, en carte plein cadre.`, "");
       if (sequence) lisezmoi.push(`${base}${avecAlpha ? "_alpha" : ""}/ : les mêmes images une par une (séquence PNG ${fps} i/s), si votre logiciel préfère.`);
     } else {
       lisezmoi.push(
