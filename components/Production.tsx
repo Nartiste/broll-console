@@ -45,9 +45,9 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
 
   /* Ce qui partirait si on lançait maintenant — recalculé à chaque tri. */
   const candidats = useMemo<ArticleProd[]>(() => {
-    const gardes = plan.inserts.filter(i => dec(i.n).etat === "oui");
+    const gardes = plan.inserts.filter(i => dec(i.bloc).etat === "oui");
     return gardes.map((i, k) => {
-      const d = dec(i.n);
+      const d = dec(i.bloc);
       const moteur = d.moteur || i.moteur;   // le choix de l'auteur l'emporte
       const base = { n: i.n, fichier: `${String(k + 1).padStart(2, "0")}-${slug(i.texte[0] || "")}`,
                      moteur, forme: i.forme, duree: i.duree };

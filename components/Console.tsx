@@ -74,7 +74,7 @@ export default function Console({ initial }: { initial: Projet }) {
     if (!ins) return;
     setGeneration(g => ({ ...g, [n]: "en-cours" })); setGenErreur(null);
     try {
-      const note = dec(n).note?.trim();
+      const note = dec(blocDe(n)).note?.trim();
       const base = promptsDe(ins);
       const prompts = note ? base.map(p => `${p} Retouche demandée : ${note}.`) : base;
       const r = await appelApi("/api/vignettes", {
@@ -86,7 +86,7 @@ export default function Console({ initial }: { initial: Projet }) {
       const images = (c.vignettes as any[]).map(v => (v.ok ? v.images?.[0]?.affichage || null : null));
       const rate = (c.vignettes as any[]).find(v => !v.ok);
       if (rate && images.every(x => !x)) throw new Error(rate.erreur || "Génération refusée");
-      majDec(n, { images });
+      majDec(blocDe(n), { images });
       setGeneration(g => { const { [n]: _, ...reste } = g; return reste; });
     } catch (e) {
       setGeneration(g => ({ ...g, [n]: "erreur" }));
@@ -95,7 +95,7 @@ export default function Console({ initial }: { initial: Projet }) {
   }
 
   async function genererToutes() {
-    const cibles = plan.inserts.filter(i => dec(i.n).etat !== "non" && !dec(i.n).images);
+    const cibles = plan.inserts.filter(i => dec(i.bloc).etat !== "non" && !dec(i.bloc).images);
     if (!cibles.length) return;
     if (!confirm(`Générer ${cibles.length * 3} images (${cibles.length} inserts × 3 variantes) ? Ordre de grandeur : ${(cibles.length * 3 * 0.03).toFixed(2)} $ hors quota gratuit.`)) return;
     for (const i of cibles) await genererVignettes(i.n);
@@ -186,19 +186,27 @@ export default function Console({ initial }: { initial: Projet }) {
     }
   }
 
-  const dec = (n: number): Decision => projet.decisions[n] || VIDE;
+  /* Les décisions vivent par bloc de script, pas par rang : un curseur du
+     cadrage recompose le plan, la décision reste sur le bon passage. */
+  const projetRef = useRef(projet); projetRef.current = projet;
+  const dec = (bloc: number): Decision => projet.decisions[bloc] || VIDE;
+  const blocDe = (n: number) => plan.inserts.find(x => x.n === n)?.bloc ?? -1;
 
   /* Le moteur du modèle est une proposition ; celui de l'auteur l'emporte.
      Et tout insert a ses prompts d'image — les analyses antérieures à cette
      règle en reçoivent à la volée, depuis le registre du projet. */
-  const moteurDe = (i: { n: number; moteur: "broll" | "motion" }) => dec(i.n).moteur || i.moteur;
+  const moteurDe = (i: { bloc: number; moteur: "broll" | "motion" }) => dec(i.bloc).moteur || i.moteur;
   const promptsDe = (i: { texte: string[]; variantes?: string[] }) =>
     i.variantes?.length ? i.variantes : troisPrompts(i.texte[0] || "", projet.da.registre);
 
-  function majDec(n: number, patch: Partial<Decision>) {
-    const decisions = { ...projet.decisions, [n]: { ...dec(n), ...patch } };
+  function majDec(bloc: number, patch: Partial<Decision>) {
+    // Toujours depuis l'état le plus récent : une génération de vignettes qui
+    // dure cinq minutes ne doit pas écraser les tris faits pendant ce temps.
+    const courant = projetRef.current;
+    const decisions = { ...courant.decisions, [bloc]: { ...(courant.decisions[bloc] || VIDE), ...patch } };
+    projetRef.current = { ...courant, decisions };
     setProjet(p => ({ ...p, decisions }));
-    majProjet(projet.id, { decisions });
+    majProjet(courant.id, { decisions });
   }
 
   /* La charte extraite est une proposition, pas un verdict : chaque valeur
@@ -219,10 +227,12 @@ export default function Console({ initial }: { initial: Projet }) {
      bout de dix minutes et on valide tout pour en finir. */
   useEffect(() => {
     function clavier(e: KeyboardEvent) {
-      if (porte !== 3) return;
+      if (porte !== 3 || !plan.inserts.length) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target as HTMLElement;
-      if (/^(INPUT|TEXTAREA)$/.test(t.tagName)) return;
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable || t.closest("dialog[open]")) return;
       const i = plan.inserts.findIndex(x => x.n === vise);
+      if (i < 0) return;
       let suivant = vise;
       if (e.key === "ArrowRight" || e.key === "ArrowDown") {
         suivant = plan.inserts[Math.min(i + 1, plan.inserts.length - 1)].n;
@@ -230,11 +240,11 @@ export default function Console({ initial }: { initial: Projet }) {
         suivant = plan.inserts[Math.max(i - 1, 0)].n;
       } else if ("123".includes(e.key)) {
         const k = ({ "1": "oui", "2": "presque", "3": "non" } as const)[e.key as "1" | "2" | "3"];
-        const actuel = dec(vise).etat;
-        majDec(vise, { etat: actuel === k ? null : k });
+        const actuel = dec(blocDe(vise)).etat;
+        majDec(blocDe(vise), { etat: actuel === k ? null : k });
         if (actuel !== k && i < plan.inserts.length - 1) suivant = plan.inserts[i + 1].n;
       } else if ("abcABC".includes(e.key)) {
-        majDec(vise, { variante: "abc".indexOf(e.key.toLowerCase()) });
+        majDec(blocDe(vise), { variante: "abc".indexOf(e.key.toLowerCase()) });
         return;
       } else return;
       e.preventDefault();
@@ -245,10 +255,10 @@ export default function Console({ initial }: { initial: Projet }) {
     return () => removeEventListener("keydown", clavier);
   });
 
-  const compte = (k: Etat) => plan.inserts.filter(i => dec(i.n).etat === k).length;
+  const compte = (k: Etat) => plan.inserts.filter(i => dec(i.bloc).etat === k).length;
   const reste = plan.inserts.length - compte("oui") - compte("presque") - compte("non");
-  const brolls = plan.inserts.filter(i => moteurDe(i) === "broll" && dec(i.n).etat !== "non");
-  const motions = plan.inserts.filter(i => moteurDe(i) === "motion" && dec(i.n).etat !== "non");
+  const brolls = plan.inserts.filter(i => moteurDe(i) === "broll" && dec(i.bloc).etat !== "non");
+  const motions = plan.inserts.filter(i => moteurDe(i) === "motion" && dec(i.bloc).etat !== "non");
   const secondes = brolls.reduce((t, i) => t + Math.min(i.duree, projet.cadrage.dureeMax), 0);
 
   const conformite = projet.da.mesure ? derive(projet.da.accent, projet.da.mesure.accent) : null;
@@ -258,14 +268,14 @@ export default function Console({ initial }: { initial: Projet }) {
       projet: projet.titre,
       cadrage: projet.cadrage,
       da: projet.da.nom,
-      inserts: plan.inserts.filter(i => dec(i.n).etat && dec(i.n).etat !== "non").map(i => ({
+      inserts: plan.inserts.filter(i => dec(i.bloc).etat && dec(i.bloc).etat !== "non").map(i => ({
         n: i.n, entree: i.entree, duree: i.duree, moteur: i.moteur, forme: i.forme,
-        decision: dec(i.n).etat, variante: "ABC"[dec(i.n).variante],
-        source: i.moteur === "motion" ? i.params : i.variantes?.[dec(i.n).variante],
-        retouche: dec(i.n).note || undefined,
+        decision: dec(i.bloc).etat, variante: "ABC"[dec(i.bloc).variante],
+        source: i.moteur === "motion" ? i.params : i.variantes?.[dec(i.bloc).variante],
+        retouche: dec(i.bloc).note || undefined,
       })),
       diagnostic_da: plan.inserts.reduce((acc: Record<string, number>, i) => {
-        dec(i.n).raisons.forEach(r => (acc[r] = (acc[r] || 0) + 1));
+        dec(i.bloc).raisons.forEach(r => (acc[r] = (acc[r] || 0) + 1));
         return acc;
       }, {}),
     }, null, 2));
@@ -667,7 +677,7 @@ export default function Console({ initial }: { initial: Projet }) {
                 const el: React.ReactNode[] = [];
                 let fin = 0;
                 plan.inserts.forEach(i => {
-                  const hors = dec(i.n).etat === "non";
+                  const hors = dec(i.bloc).etat === "non";
                   if (!hors) {
                     const trou = i.entree - fin;
                     if (trou > projet.cadrage.ecartMax) {
@@ -701,7 +711,7 @@ export default function Console({ initial }: { initial: Projet }) {
               </span>
             </div>
             {(() => {
-              const restantes = plan.inserts.filter(i => dec(i.n).etat !== "non" && !dec(i.n).images).length;
+              const restantes = plan.inserts.filter(i => dec(i.bloc).etat !== "non" && !dec(i.bloc).images).length;
               const enCours = Object.values(generation).includes("en-cours");
               return restantes > 0 ? (
                 <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
@@ -746,7 +756,7 @@ export default function Console({ initial }: { initial: Projet }) {
           )}
           <div className="planche">
             {plan.inserts.map(ins => {
-              const d = dec(ins.n);
+              const d = dec(ins.bloc);
               return (
                 <article key={ins.n} id={`insert-${ins.n}`}
                          className={"insert" + (ins.n === vise ? " vise" : "")}
@@ -759,13 +769,13 @@ export default function Console({ initial }: { initial: Projet }) {
                         {ins.params && (
                           <button className={"tag" + (moteurDe(ins) === "motion" ? " motion" : "")}
                                   title="Rendre ce passage en gabarit typographique"
-                                  onClick={e => { e.stopPropagation(); majDec(ins.n, { moteur: "motion" }); }}>
+                                  onClick={e => { e.stopPropagation(); majDec(ins.bloc, { moteur: "motion" }); }}>
                             Motion · {LIBELLES[ins.forme as FormeMotion]?.nom || ins.forme}
                           </button>
                         )}
                         <button className={"tag" + (moteurDe(ins) === "broll" ? " motion" : "")}
                                 title="Rendre ce passage en image, puis en clip"
-                                onClick={e => { e.stopPropagation(); majDec(ins.n, { moteur: "broll" }); }}>
+                                onClick={e => { e.stopPropagation(); majDec(ins.bloc, { moteur: "broll" }); }}>
                           B-roll
                         </button>
                       </span>
@@ -793,7 +803,7 @@ export default function Console({ initial }: { initial: Projet }) {
                       {[0, 1, 2].map(i => (
                         <figure key={i}
                                 className={"variante" + (d.variante === i ? " choisie" : "")}
-                                onClick={() => majDec(ins.n, { variante: i })}>
+                                onClick={() => majDec(ins.bloc, { variante: i })}>
                           <Vignette ins={{ ...ins, moteur: moteurDe(ins) }} i={i} accent={projet.da.accent}
                                     gabarit={gabaritPour(ins.forme)} vars={vars}
                                     image={d.images?.[i] ?? null} />
@@ -828,7 +838,7 @@ export default function Console({ initial }: { initial: Projet }) {
                         <textarea className="champ" style={{ marginTop: 6, minHeight: 44, fontSize: 13, resize: "vertical" }}
                                   value={d.mouvement ?? ins.mouvement ?? ""}
                                   placeholder="Ce qui bouge pendant le clip : le geste du sujet, la vie du décor — pas seulement la caméra."
-                                  onChange={e => majDec(ins.n, { mouvement: e.target.value })}
+                                  onChange={e => majDec(ins.bloc, { mouvement: e.target.value })}
                                   onClick={e => e.stopPropagation()} />
                       </div>
                     )}
@@ -837,7 +847,7 @@ export default function Console({ initial }: { initial: Projet }) {
                         .map(([k, l, t]) => (
                           <button key={k} className={"etat " + k}
                                   aria-pressed={d.etat === k}
-                                  onClick={() => majDec(ins.n, { etat: d.etat === k ? null : k })}>
+                                  onClick={() => majDec(ins.bloc, { etat: d.etat === k ? null : k })}>
                             {l} <kbd>{t}</kbd>
                           </button>
                         ))}
@@ -851,7 +861,7 @@ export default function Console({ initial }: { initial: Projet }) {
                         <div className="raisons">
                           {RAISONS.map(r => (
                             <button key={r} className="raison" aria-pressed={d.raisons.includes(r)}
-                                    onClick={() => majDec(ins.n, {
+                                    onClick={() => majDec(ins.bloc, {
                                       raisons: d.raisons.includes(r)
                                         ? d.raisons.filter(x => x !== r)
                                         : [...d.raisons, r],
@@ -863,7 +873,7 @@ export default function Console({ initial }: { initial: Projet }) {
                         {d.etat === "presque" && (
                           <textarea className="champ retouche" value={d.note}
                                     placeholder="Ce qu'il faut changer pour la relance — facultatif"
-                                    onChange={e => majDec(ins.n, { note: e.target.value })} />
+                                    onChange={e => majDec(ins.bloc, { note: e.target.value })} />
                         )}
                       </>
                     )}

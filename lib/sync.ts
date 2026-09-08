@@ -14,9 +14,10 @@
 
 import { supabase } from "./supabase";
 import type { Projet } from "./store";
+import { migrer } from "./migrations";
 
 const CLE = "broll-console:projets";
-const lireLocal = (): Projet[] => { try { return JSON.parse(localStorage.getItem(CLE) || "[]"); } catch { return []; } };
+const lireLocal = (): Projet[] => { try { return (JSON.parse(localStorage.getItem(CLE) || "[]") as Projet[]).map(migrer); } catch { return []; } };
 const ecrireLocal = (p: Projet[]) => { try { localStorage.setItem(CLE, JSON.stringify(p)); } catch { /* mode privé */ } };
 
 export async function utilisateur(): Promise<{ id: string; email?: string } | null> {
@@ -63,7 +64,7 @@ export async function tirer(): Promise<{ recus: number; locaux: number } | null>
   const locaux = lireLocal();
   const parId = new Map(locaux.map(p => [p.id, p]));
   for (const ligne of data) {
-    const distant = ligne.data as Projet;
+    const distant = migrer(ligne.data as Projet);
     const local = parId.get(ligne.id);
     if (!local || (distant.maj || 0) >= (local.maj || 0)) parId.set(ligne.id, { ...distant, compte: u.id });
   }

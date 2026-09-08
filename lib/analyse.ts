@@ -34,7 +34,8 @@ export const CADRAGE_DEFAUT: Cadrage = {
 };
 
 export interface Insert {
-  n: number;
+  n: number;             // rang dans le plan — change à chaque recomposition
+  bloc: number;          // index du bloc de script — stable, c'est la clé des décisions
   section: string;
   moteur: Moteur;
   forme: Forme;
@@ -361,6 +362,7 @@ export function composer(
 
   const inserts: Insert[] = retenus.map((c, i) => ({
     n: i + 1,
+    bloc: c.bloc,
     section: c.src.section,
     moteur: c.moteur,
     forme: c.forme,

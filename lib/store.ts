@@ -11,6 +11,7 @@
 
 import { analyser, composer, CADRAGE_DEFAUT, type Cadrage, type Choix, type Plan } from "./analyse";
 import { DA_NEUTRE, type DA } from "./da";
+import { migrer, VERSION_PROJET } from "./migrations";
 import { pousser, supprimerDistant } from "./sync";
 
 export type Etat = "oui" | "presque" | "non" | null;
@@ -64,7 +65,10 @@ export interface Projet {
   script: string;
   cadrage: Cadrage;
   da: DA;
+  /** Les décisions, indexées par bloc de script (Insert.bloc). */
   decisions: Record<number, Decision>;
+  /** Version du schéma — voir lib/migrations.ts. */
+  version?: number;
   /** Le jugement, tel que renvoyé par l'analyse. Absent tant qu'elle n'a pas tourné. */
   choix?: Choix[];
   palier?: "modele" | "deterministe";
@@ -81,7 +85,13 @@ const CLE = "broll-console:projets";
 
 const lire = (): Projet[] => {
   if (typeof window === "undefined") return [];
-  try { return JSON.parse(localStorage.getItem(CLE) || "[]"); } catch { return []; }
+  try {
+    const bruts = JSON.parse(localStorage.getItem(CLE) || "[]") as Projet[];
+    const migres = bruts.map(migrer);
+    // Un projet migré est réécrit tout de suite : la migration ne se rejoue pas.
+    if (bruts.some((b, i) => b.version !== migres[i].version)) ecrire(migres);
+    return migres;
+  } catch { return []; }
 };
 
 const ecrire = (p: Projet[]) => {
@@ -109,6 +119,7 @@ export function creer(script: string, nomFichier = "Nouveau projet"): Projet {
     cadrage: { ...CADRAGE_DEFAUT },
     da: { ...DA_NEUTRE },
     decisions: {},
+    version: VERSION_PROJET,
     maj: Date.now(),
   };
   ecrire([p, ...lire()]);
