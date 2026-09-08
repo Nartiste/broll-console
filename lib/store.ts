@@ -50,6 +50,7 @@ export interface ArticleProd {
   movChemin?: string;       // le .mov rendu, déposé sur le compte (chemin de stockage)
   pngChemin?: string;       // l'image fixe, idem
   empreinte?: string;       // empreinte du HTML rendu : si le gabarit change, on re-rend
+  apercuUrl?: string;       // aperçu MP4 lisible dans le navigateur, sur le compte
 }
 
 export interface Production {

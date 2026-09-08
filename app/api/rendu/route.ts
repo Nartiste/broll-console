@@ -29,9 +29,10 @@ export const dynamic = "force-dynamic";
  */
 const executer = promisify(execFile);
 
-/** Assemble les images en .mov à canal alpha. Null si ffmpeg manque ou échoue :
- *  la séquence PNG reste livrée. */
-async function encoderMov(images: Buffer[], fps: number): Promise<Buffer | null> {
+/** Assemble les images en .mov à canal alpha, plus un aperçu MP4 que le
+ *  navigateur sait lire (posé sur un gris neutre, l'alpha n'existant pas en H.264).
+ *  Null si ffmpeg manque ou échoue : la séquence PNG reste livrée. */
+async function encoderMov(images: Buffer[], fps: number): Promise<{ mov: Buffer; apercu: Buffer | null } | null> {
   let ffmpeg: string | null = null;
   try { ffmpeg = (await import("ffmpeg-static")).default as unknown as string; } catch { return null; }
   if (!ffmpeg) return null;
@@ -41,7 +42,16 @@ async function encoderMov(images: Buffer[], fps: number): Promise<Buffer | null>
     const sortie = join(dossier, "sortie.mov");
     await executer(ffmpeg, ["-y", "-loglevel", "error", "-framerate", String(fps), "-i", join(dossier, "%04d.png"),
                             "-c:v", "png", "-compression_level", "2", "-pix_fmt", "rgba", sortie], { timeout: 120_000 });
-    return await readFile(sortie);
+    const mov = await readFile(sortie);
+    let apercu: Buffer | null = null;
+    try {
+      const ap = join(dossier, "apercu.mp4");
+      await executer(ffmpeg, ["-y", "-loglevel", "error", "-framerate", String(fps), "-i", join(dossier, "%04d.png"),
+                              "-filter_complex", `color=c=0x3c3f3a:s=1920x1080:r=${fps}[bg];[bg][0:v]overlay=shortest=1,scale=960:-2,format=yuv420p`,
+                              "-c:v", "libx264", "-preset", "veryfast", "-crf", "24", "-movflags", "+faststart", ap], { timeout: 120_000 });
+      apercu = await readFile(ap);
+    } catch { /* l'aperçu est un confort, pas le livrable */ }
+    return { mov, apercu };
   } catch {
     return null;
   } finally {
@@ -123,8 +133,11 @@ export async function POST(req: Request) {
         trames.push(png);
         dossier.file(`${base}${suffixe}_${String(i + 1).padStart(4, "0")}.png`, png);
       }
-      const mov = await encoderMov(trames, Number(fps));
-      if (mov) { zip.file(`${base}${suffixe}.mov`, mov); avecMov = true; }
+      const enc = await encoderMov(trames, Number(fps));
+      if (enc) {
+        zip.file(`${base}${suffixe}.mov`, enc.mov); avecMov = true;
+        if (enc.apercu) zip.file(`${base}${suffixe}_apercu.mp4`, enc.apercu);
+      }
       if (fixe) {
         await figer(Number(duree) + 1);
         zip.file(`${base}${suffixe}.png`, await page.screenshot({ type: "png", omitBackground: true, optimizeForSpeed: true }));

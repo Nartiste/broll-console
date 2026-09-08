@@ -6,6 +6,7 @@ import { DUREE_ANIMATION, LIBELLES, dureeDe, document as documentGabarit, type G
 import { TARIFS } from "@/lib/tarifs";
 import { cle, deposer, empreinte, enCache, recuperer, rendre, telecharger } from "@/lib/rendus";
 import { appelApi, lireJson } from "@/lib/api-client";
+import GabaritApercu from "./GabaritApercu";
 import { ancrer, blobDepuis, estDurable } from "@/lib/medias";
 import type { ArticleProd, Decision, Production as Prod, Projet } from "@/lib/store";
 
@@ -164,6 +165,8 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
      sans qu'on le demande : un fichier prêt est un fichier téléchargeable.
      Le résultat est gardé en mémoire, et déposé sur le compte s'il y en a un. */
   const [rendus, setRendus] = useState<Record<string, "en-cours" | "pret" | "echec" | undefined>>({});
+  /* L'aperçu vidéo de chaque gabarit rendu : en mémoire dans l'onglet, sinon sur le compte. */
+  const [apercus, setApercus] = useState<Record<string, string>>({});
   const [tour, setTour] = useState(0);
   const lances = useRef(new Set<string>());
   useEffect(() => {
@@ -184,10 +187,11 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       try {
         const f = await rendre(projet.id, { html: v.html, fichier: a.fichier, duree: v.duree });
         setRendus(q => ({ ...q, [a.fichier]: "pret" }));
+        if (f.apercu) setApercus(q => ({ ...q, [a.fichier]: URL.createObjectURL(f.apercu!) }));
         const chemins = await deposer(projet.id, a.fichier, f);
         const courant = prodRef.current;
         if (chemins && courant) {
-          onMaj({ ...courant, articles: courant.articles.map(x => x.fichier === a.fichier ? { ...x, movChemin: chemins.mov, pngChemin: chemins.png, empreinte: v.empreinte } : x) });
+          onMaj({ ...courant, articles: courant.articles.map(x => x.fichier === a.fichier ? { ...x, movChemin: chemins.mov, pngChemin: chemins.png, apercuUrl: chemins.apercu, empreinte: v.empreinte } : x) });
         }
       } catch {
         setRendus(q => ({ ...q, [a.fichier]: "echec" }));
@@ -359,6 +363,15 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                 })()}
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   {a.video && <video src={a.video} controls preload="metadata" style={{ width: 160, borderRadius: 8, background: "#000" }} />}
+                  {vivants[a.fichier] && (() => {
+                    const src = apercus[a.fichier] || (a.empreinte === vivants[a.fichier]!.empreinte ? a.apercuUrl : undefined);
+                    const g = gabaritPour(a.forme); const ins = plan.inserts.find(x => x.n === a.n);
+                    return src
+                      ? <video src={src} controls preload="metadata" style={{ width: 160, borderRadius: 8, background: "#3c3f3a" }} title="Aperçu du rendu, posé sur un gris neutre" />
+                      : g && ins ? <div className="vignette" style={{ width: 160, borderRadius: 8, flex: "none" }} title="Aperçu animé du gabarit (survoler pour rejouer) — le rendu arrive">
+                          <GabaritApercu gabarit={g} params={ins.params || {}} vars={vars} variante={(["clair", "sombre", "inverse"] as const)[dec(ins.bloc).variante] || "clair"} anime />
+                        </div> : null;
+                  })()}
                   {a.video && <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
                                  onClick={async () => {
                                    const blob = await blobDepuis(a.video!);

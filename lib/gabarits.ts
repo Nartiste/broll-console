@@ -145,7 +145,9 @@ const ANIMATION = `
 /** Les familles nommées d'une pile CSS, sans les génériques : ce qu'on peut demander à Google Fonts. */
 export function famillesDe(pile: string | undefined): string[] {
   if (!pile) return [];
-  const generiques = /^(serif|sans-serif|monospace|system-ui|ui-sans-serif|ui-serif|ui-monospace|cursive|fantasy|inherit|initial)$/i;
+  // Génériques CSS et polices système : Google Fonts ne les a pas, et une seule famille
+  // inconnue fait échouer toute la feuille demandée.
+  const generiques = /^(serif|sans-serif|monospace|system-ui|ui-sans-serif|ui-serif|ui-monospace|ui-rounded|cursive|fantasy|inherit|initial|helvetica( neue)?|arial|times( new roman)?|georgia|verdana|tahoma|trebuchet ms|courier( new)?|menlo|monaco|consolas|segoe ui|sf pro( display| text)?|san francisco|-apple-system|blinkmacsystemfont|avenir( next)?|futura|gill sans|optima|impact|calibri|cambria)$/i;
   return pile.split(",").map(f => f.trim().replace(/^['"]|['"]$/g, "")).filter(f => f && !generiques.test(f)).slice(0, 2);
 }
 

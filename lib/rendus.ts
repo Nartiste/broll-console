@@ -13,7 +13,7 @@ import { appelApi, lireJson } from "./api-client";
  * compte (rendus/<utilisateur>/<projet>/<fichier>), d'où il revient sur
  * n'importe quel appareil.
  */
-export interface FichiersRendu { mov: Blob; png?: Blob; zip: Blob; empreinte: string }
+export interface FichiersRendu { mov: Blob; png?: Blob; apercu?: Blob; zip: Blob; empreinte: string }
 
 const CACHE = new Map<string, FichiersRendu>();
 export const cle = (projetId: string, fichier: string) => `${projetId}/${fichier}`;
@@ -45,13 +45,15 @@ export async function rendre(projetId: string, a: { html: string; fichier: strin
   const mov = await z.file(alpha ? `${a.fichier}_alpha.mov` : `${a.fichier}.mov`)?.async("blob");
   if (!mov) throw new Error("Le rendu ne contient pas de vidéo");
   const png = await z.file(alpha ? `${a.fichier}_alpha.png` : `${a.fichier}.png`)?.async("blob");
-  const f: FichiersRendu = { mov: mov.slice(0, mov.size, "video/quicktime"), png, zip, empreinte: empreinte(a.html) };
+  const apercuBrut = await z.file(alpha ? `${a.fichier}_alpha_apercu.mp4` : `${a.fichier}_apercu.mp4`)?.async("blob");
+  const apercu = apercuBrut ? apercuBrut.slice(0, apercuBrut.size, "video/mp4") : undefined;
+  const f: FichiersRendu = { mov: mov.slice(0, mov.size, "video/quicktime"), png, apercu, zip, empreinte: empreinte(a.html) };
   CACHE.set(cle(projetId, a.fichier), f);
   return f;
 }
 
 /** Dépose le .mov et l'image fixe sur le compte. Null sans compte (ou sans espace de stockage). */
-export async function deposer(projetId: string, fichier: string, f: FichiersRendu): Promise<{ mov: string; png?: string } | null> {
+export async function deposer(projetId: string, fichier: string, f: FichiersRendu): Promise<{ mov: string; png?: string; apercu?: string } | null> {
   const sb = supabase();
   if (!sb) return null;
   const { data } = await sb.auth.getSession();
@@ -65,7 +67,13 @@ export async function deposer(projetId: string, fichier: string, f: FichiersRend
     const p = await sb.storage.from("rendus").upload(`${base}.png`, f.png, { upsert: true, contentType: "image/png" });
     if (!p.error) png = `${base}.png`;
   }
-  return { mov: `${base}.mov`, png };
+  // L'aperçu va dans l'espace public : c'est une adresse que la balise vidéo lit directement.
+  let apercu: string | undefined;
+  if (f.apercu) {
+    const a = await sb.storage.from("medias").upload(`${base}-apercu.mp4`, f.apercu, { upsert: true, contentType: "video/mp4" });
+    if (!a.error) apercu = sb.storage.from("medias").getPublicUrl(`${base}-apercu.mp4`).data.publicUrl;
+  }
+  return { mov: `${base}.mov`, png, apercu };
 }
 
 /** Un fichier déposé sur le compte, rapatrié. Null s'il n'y est pas (ou plus). */
