@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { composer, analyser, CADRAGE_DEFAUT } from "@/lib/analyse";
+import { composer, analyser, paramsPour, CADRAGE_DEFAUT } from "@/lib/analyse";
 import { derive, variables, variablesBrutes, type DA } from "@/lib/da";
 import { EXEMPLES, LIBELLES, SLOTS, type FormeMotion, type Gabarit, dureeDe } from "@/lib/gabarits";
 import { troisPrompts } from "@/lib/images";
@@ -205,6 +205,12 @@ export default function Console({ initial }: { initial: Projet }) {
      Et tout insert a ses prompts d'image — les analyses antérieures à cette
      règle en reçoivent à la volée, depuis le registre du projet. */
   const moteurDe = (i: { bloc: number; moteur: "broll" | "motion" }) => dec(i.bloc).moteur || i.moteur;
+  /* La forme de gabarit d'un insert : celle de l'auteur, sinon celle de l'analyse,
+     sinon le mot-choc — n'importe quel passage peut devenir un motion. */
+  const formeDe = (i: { bloc: number; forme: string }): FormeMotion =>
+    (dec(i.bloc).forme as FormeMotion) || (i.forme !== "scene" ? (i.forme as FormeMotion) : "mot-choc");
+  const paramsDe = (i: { bloc: number; forme: string; params?: Record<string, any>; texte: string[]; section: string }) =>
+    formeDe(i) === i.forme && i.params && Object.keys(i.params).length ? i.params : paramsPour(formeDe(i), i.texte, i.section);
   const promptsDe = (i: { texte: string[]; variantes?: string[] }) =>
     i.variantes?.length ? i.variantes : troisPrompts(i.texte[0] || "", projet.da.registre);
 
@@ -775,12 +781,18 @@ export default function Console({ initial }: { initial: Projet }) {
                     <div className="rang">
                       <span className="num">{ins.n}</span>
                       <span style={{ display: "inline-flex", gap: 4 }}>
-                        {ins.params && (
-                          <button className={"tag" + (moteurDe(ins) === "motion" ? " motion" : "")}
-                                  title="Rendre ce passage en gabarit typographique"
-                                  onClick={e => { e.stopPropagation(); majDec(ins.bloc, { moteur: "motion" }); }}>
-                            Motion · {LIBELLES[ins.forme as FormeMotion]?.nom || ins.forme}
-                          </button>
+                        <button className={"tag" + (moteurDe(ins) === "motion" ? " motion" : "")}
+                                title="Rendre ce passage en gabarit typographique"
+                                onClick={e => { e.stopPropagation(); majDec(ins.bloc, { moteur: "motion" }); }}>
+                          Motion · {LIBELLES[formeDe(ins)]?.nom || formeDe(ins)}
+                        </button>
+                        {moteurDe(ins) === "motion" && (
+                          <select className="champ" style={{ width: "auto", padding: "2px 6px", fontSize: 11 }} value={formeDe(ins)}
+                                  title="La forme du gabarit pour ce passage"
+                                  onClick={e => e.stopPropagation()}
+                                  onChange={e => majDec(ins.bloc, { forme: e.target.value })}>
+                            {(Object.keys(LIBELLES) as FormeMotion[]).map(f => <option key={f} value={f}>{LIBELLES[f].nom}</option>)}
+                          </select>
                         )}
                         <button className={"tag" + (moteurDe(ins) === "broll" ? " motion" : "")}
                                 title="Rendre ce passage en image, puis en clip"
@@ -813,8 +825,8 @@ export default function Console({ initial }: { initial: Projet }) {
                         <figure key={i}
                                 className={"variante" + (d.variante === i ? " choisie" : "")}
                                 onClick={() => majDec(ins.bloc, { variante: i })}>
-                          <Vignette ins={{ ...ins, moteur: moteurDe(ins) }} i={i} accent={projet.da.accent}
-                                    gabarit={gabaritPour(ins.forme)} vars={vars}
+                          <Vignette ins={{ ...ins, moteur: moteurDe(ins), forme: formeDe(ins), params: paramsDe(ins) }} i={i} accent={projet.da.accent}
+                                    gabarit={gabaritPour(formeDe(ins))} vars={vars}
                                     image={d.images?.[i] ?? null} />
                           <figcaption>
                             <span className="lettre">Variante {"ABC"[i]}</span>

@@ -52,8 +52,9 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     return gardes.map((i, k) => {
       const d = dec(i.bloc);
       const moteur = d.moteur || i.moteur;   // le choix de l'auteur l'emporte
+      const forme = (d.forme as string) || (i.forme !== "scene" ? i.forme : "mot-choc");
       const base = { n: i.n, bloc: i.bloc, fichier: `${String(k + 1).padStart(2, "0")}-${slug(i.texte[0] || "")}`,
-                     moteur, forme: i.forme, duree: i.duree };
+                     moteur, forme, duree: i.duree };
       if (moteur === "broll") {
         return { ...base, statut: "attente" as const,
                  prompt: i.variantes?.[d.variante] || i.variantes?.[0] || i.texte.join(" "),
@@ -92,7 +93,8 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
   }, [prod?.lancee, plan]);
   /* Le mode de rendu : « plein » ressemble à l'aperçu, fond compris ; « transparent »
      ne garde que le composant, à poser sur le plan face caméra. */
-  const mode: ModeRendu = prod?.mode || "plein";
+  // Transparent par défaut : un motion se pose sur le plan face caméra.
+  const mode: ModeRendu = prod?.mode || "transparent";
   const changerMode = (m: ModeRendu) => { if (prod) onMaj({ ...prod, mode: m }); };
   const vivant = (a: ArticleProd): { html: string; duree: number; empreinte: string } | null => {
     if (a.moteur !== "motion") return null;
@@ -422,13 +424,13 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
             <span className="eyebrow" style={{ marginRight: 4 }}>Rendu des gabarits</span>
-            <button className="pilule" aria-pressed={mode === "plein"} style={mode === "plein" ? { borderColor: "var(--accent)", color: "var(--accent)" } : undefined}
-                    onClick={() => changerMode("plein")} title="Le fichier ressemble à l'aperçu de la planche, fond compris. Se pose en coupe, comme un B-roll.">
-              Comme l'aperçu, plein cadre
-            </button>
             <button className="pilule" aria-pressed={mode === "transparent"} style={mode === "transparent" ? { borderColor: "var(--accent)", color: "var(--accent)" } : undefined}
                     onClick={() => changerMode("transparent")} title="Seul le composant est rendu, sans le fond du gabarit. Se superpose à votre plan face caméra.">
               Fond transparent, à superposer
+            </button>
+            <button className="pilule" aria-pressed={mode === "plein"} style={mode === "plein" ? { borderColor: "var(--accent)", color: "var(--accent)" } : undefined}
+                    onClick={() => changerMode("plein")} title="Le fichier ressemble à l'aperçu de la planche, fond compris. Se pose en coupe, comme un B-roll.">
+              Comme l'aperçu, plein cadre
             </button>
             <span className="muet" style={{ fontSize: 12 }}>Changer de mode relance les rendus.</span>
           </div>

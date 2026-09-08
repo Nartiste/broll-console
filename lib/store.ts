@@ -26,6 +26,8 @@ export interface Decision {
   images?: (string | null)[];
   /** Le moteur retenu par l'auteur, s'il diffère de la proposition du modèle. */
   moteur?: "broll" | "motion";
+  /** La forme de gabarit imposée par l'auteur (un B-roll passé en motion, ou une autre forme). */
+  forme?: string;
   /** Le mouvement du clip, retouché par l'auteur. */
   mouvement?: string;
 }
