@@ -52,7 +52,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     return gardes.map((i, k) => {
       const d = dec(i.bloc);
       const moteur = d.moteur || i.moteur;   // le choix de l'auteur l'emporte
-      const base = { n: i.n, fichier: `${String(k + 1).padStart(2, "0")}-${slug(i.texte[0] || "")}`,
+      const base = { n: i.n, bloc: i.bloc, fichier: `${String(k + 1).padStart(2, "0")}-${slug(i.texte[0] || "")}`,
                      moteur, forme: i.forme, duree: i.duree };
       if (moteur === "broll") {
         return { ...base, statut: "attente" as const,
@@ -72,10 +72,18 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
 
   /* Un article motion n'est jamais figé : son HTML se recalcule à chaque fois
      à partir du gabarit et du contenu actuels. Le gabarit change, le rendu suit. */
+  /* Le passage d'un article : par bloc de script quand on l'a, sinon par le
+     texte du nom de fichier (productions d'avant), le rang en dernier recours —
+     il change dès que le plan se recompose. */
+  const insertDe = (a: ArticleProd) => {
+    if (a.bloc !== undefined) { const i = plan.inserts.find(x => x.bloc === a.bloc); if (i) return i; }
+    const texte = a.fichier.replace(/^\d+-/, "");
+    return plan.inserts.find(x => slug(x.texte[0] || "") === texte) || plan.inserts.find(x => x.n === a.n);
+  };
   const vivant = (a: ArticleProd): { html: string; duree: number; empreinte: string } | null => {
     if (a.moteur !== "motion") return null;
     const g = gabaritPour(a.forme);
-    const i = plan.inserts.find(x => x.n === a.n);
+    const i = insertDe(a);
     if (g && i) {
       const d = dec(i.bloc);
       const variante = (["clair", "sombre", "inverse"] as const)[d.variante] || "clair";
@@ -237,16 +245,16 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       const z = new JSZip();
       const timeline: string[] = [];
       const manques: string[] = [];
-      const timecode = (n: number) => { const i = plan.inserts.find(x => x.n === n); if (!i) return "     "; const t = i.entree; return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`; };
+      const timecode = (a: ArticleProd) => { const i = insertDe(a); if (!i) return "     "; const t = i.entree; return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`; };
       for (const a of prod.articles) {
         if (a.statut === "pret" && a.video) {
           setEtapeZip(`${a.fichier}…`);
           const blob = await blobDepuis(a.video);
           if (blob) {
             z.file(`01-TIMELINE/${a.fichier}.mp4`, blob);
-            timeline.push(`${timecode(a.n)}  ${a.fichier}.mp4  ·  B-roll ${a.duree} s  ·  piste V2, en coupe sur le plan`);
+            timeline.push(`${timecode(a)}  ${a.fichier}.mp4  ·  B-roll ${a.duree} s  ·  piste V2, en coupe sur le plan`);
           } else {
-            timeline.push(`${timecode(a.n)}  ${a.fichier}.mp4  ·  B-roll  ·  CLIP INDISPONIBLE (adresse expirée) — relancez la production pour ce passage`);
+            timeline.push(`${timecode(a)}  ${a.fichier}.mp4  ·  B-roll  ·  CLIP INDISPONIBLE (adresse expirée) — relancez la production pour ce passage`);
             manques.push(a.fichier);
           }
         } else if (vivants[a.fichier]) {
@@ -254,7 +262,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
           const f = await fichiersDe(a);
           if (!f) {
             z.file(`03-SOURCES/${a.fichier}/${a.fichier}.html`, vivants[a.fichier]!.html);
-            timeline.push(`${timecode(a.n)}  ${a.fichier}  ·  motion  ·  RENDU IMPOSSIBLE, HTML dans 03-SOURCES`);
+            timeline.push(`${timecode(a)}  ${a.fichier}  ·  motion  ·  RENDU IMPOSSIBLE, HTML dans 03-SOURCES`);
             continue;
           }
           z.file(`01-TIMELINE/${a.fichier}.mov`, f.mov);
@@ -266,7 +274,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
               z.file(`03-SOURCES/${x.name}`, await x.async("blob"));
             }));
           }
-          timeline.push(`${timecode(a.n)}  ${a.fichier}.mov  ·  motion ${vivants[a.fichier]!.duree} s  ·  piste V3, PAR-DESSUS le plan (fond transparent)`);
+          timeline.push(`${timecode(a)}  ${a.fichier}.mov  ·  motion ${vivants[a.fichier]!.duree} s  ·  piste V3, PAR-DESSUS le plan (fond transparent)`);
         }
       }
       z.file("00-LISEZMOI.txt",
@@ -365,7 +373,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                   {a.video && <video src={a.video} controls preload="metadata" style={{ width: 160, borderRadius: 8, background: "#000" }} />}
                   {vivants[a.fichier] && (() => {
                     const src = apercus[a.fichier] || (a.empreinte === vivants[a.fichier]!.empreinte ? a.apercuUrl : undefined);
-                    const g = gabaritPour(a.forme); const ins = plan.inserts.find(x => x.n === a.n);
+                    const g = gabaritPour(a.forme); const ins = insertDe(a);
                     return src
                       ? <video src={src} controls preload="metadata" style={{ width: 160, borderRadius: 8, background: "#3c3f3a" }} title="Aperçu du rendu, posé sur un gris neutre" />
                       : g && ins ? <div className="vignette" style={{ width: 160, borderRadius: 8, flex: "none" }} title="Aperçu animé du gabarit (survoler pour rejouer) — le rendu arrive">

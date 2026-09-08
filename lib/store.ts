@@ -33,7 +33,8 @@ export interface Decision {
 export type StatutProd = "attente" | "file" | "en-cours" | "pret" | "echec" | "sans-objet";
 
 export interface ArticleProd {
-  n: number;
+  n: number;                // rang au moment du lancement — peut changer ensuite
+  bloc?: number;            // bloc de script : la vraie identité du passage
   fichier: string;          // NN-titre-court, sans extension
   moteur: "broll" | "motion";
   forme: string;
