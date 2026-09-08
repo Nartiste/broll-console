@@ -31,10 +31,15 @@ export function empreinte(html: string): string {
 }
 
 /** Fait rendre le gabarit par le serveur et en tire les fichiers utiles. */
-export async function rendre(projetId: string, a: { html: string; fichier: string; duree: number }): Promise<FichiersRendu> {
+export type ModeRendu = "plein" | "transparent";
+/** L'empreinte d'un rendu : le HTML et le mode — un même gabarit rendu plein cadre ou transparent, ce sont deux fichiers. */
+export const empreinteRendu = (html: string, mode: ModeRendu) => empreinte(html + "|" + mode);
+
+export async function rendre(projetId: string, a: { html: string; fichier: string; duree: number; mode: ModeRendu }): Promise<FichiersRendu> {
   const r = await appelApi("/api/rendu", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ html: a.html, nom: a.fichier, fps: 24, duree: a.duree }),
+    // plein : le rendu ressemble à l'aperçu, fond compris. transparent : seul le composant, à poser sur le plan.
+    body: JSON.stringify({ html: a.html, nom: a.fichier, fps: 24, duree: a.duree, alpha: a.mode === "transparent", plein: a.mode === "plein" }),
   });
   if (!r.ok) throw new Error((await lireJson(r)).erreur || `Rendu refusé (${r.status})`);
   const zip = await r.blob();
@@ -47,13 +52,13 @@ export async function rendre(projetId: string, a: { html: string; fichier: strin
   const png = await z.file(alpha ? `${a.fichier}_alpha.png` : `${a.fichier}.png`)?.async("blob");
   const apercuBrut = await z.file(alpha ? `${a.fichier}_alpha_apercu.mp4` : `${a.fichier}_apercu.mp4`)?.async("blob");
   const apercu = apercuBrut ? apercuBrut.slice(0, apercuBrut.size, "video/mp4") : undefined;
-  const f: FichiersRendu = { mov: mov.slice(0, mov.size, "video/quicktime"), png, apercu, zip, empreinte: empreinte(a.html) };
+  const f: FichiersRendu = { mov: mov.slice(0, mov.size, "video/quicktime"), png, apercu, zip, empreinte: empreinteRendu(a.html, a.mode) };
   CACHE.set(cle(projetId, a.fichier), f);
   return f;
 }
 
 /** Dépose le .mov et l'image fixe sur le compte. Null sans compte (ou sans espace de stockage). */
-export async function deposer(projetId: string, fichier: string, f: FichiersRendu): Promise<{ mov: string; png?: string; apercu?: string } | null> {
+export async function deposer(projetId: string, fichier: string, f: FichiersRendu): Promise<{ mov: string; png?: string; apercu?: string; fixe?: string } | null> {
   const sb = supabase();
   if (!sb) return null;
   const { data } = await sb.auth.getSession();
@@ -73,7 +78,13 @@ export async function deposer(projetId: string, fichier: string, f: FichiersRend
     const a = await sb.storage.from("medias").upload(`${base}-apercu.mp4`, f.apercu, { upsert: true, contentType: "video/mp4" });
     if (!a.error) apercu = sb.storage.from("medias").getPublicUrl(`${base}-apercu.mp4`).data.publicUrl;
   }
-  return { mov: `${base}.mov`, png, apercu };
+  // L'image fixe en public aussi : c'est l'affiche de l'aperçu vidéo.
+  let fixe: string | undefined;
+  if (f.png) {
+    const x = await sb.storage.from("medias").upload(`${base}-fixe.png`, f.png, { upsert: true, contentType: "image/png" });
+    if (!x.error) fixe = sb.storage.from("medias").getPublicUrl(`${base}-fixe.png`).data.publicUrl;
+  }
+  return { mov: `${base}.mov`, png, apercu, fixe };
 }
 
 /** Un fichier déposé sur le compte, rapatrié. Null s'il n'y est pas (ou plus). */

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Plan } from "@/lib/analyse";
 import { DUREE_ANIMATION, LIBELLES, dureeDe, document as documentGabarit, type Gabarit } from "@/lib/gabarits";
 import { TARIFS } from "@/lib/tarifs";
-import { cle, deposer, empreinte, enCache, recuperer, rendre, telecharger } from "@/lib/rendus";
+import { cle, deposer, empreinteRendu, enCache, recuperer, rendre, telecharger, type ModeRendu } from "@/lib/rendus";
 import { appelApi, lireJson } from "@/lib/api-client";
 import GabaritApercu from "./GabaritApercu";
 import { ancrer, blobDepuis, estDurable } from "@/lib/medias";
@@ -80,6 +80,10 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     const texte = a.fichier.replace(/^\d+-/, "");
     return plan.inserts.find(x => slug(x.texte[0] || "") === texte) || plan.inserts.find(x => x.n === a.n);
   };
+  /* Le mode de rendu : « plein » ressemble à l'aperçu, fond compris ; « transparent »
+     ne garde que le composant, à poser sur le plan face caméra. */
+  const mode: ModeRendu = prod?.mode || "plein";
+  const changerMode = (m: ModeRendu) => { if (prod) onMaj({ ...prod, mode: m }); };
   const vivant = (a: ArticleProd): { html: string; duree: number; empreinte: string } | null => {
     if (a.moteur !== "motion") return null;
     const g = gabaritPour(a.forme);
@@ -87,17 +91,17 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     if (g && i) {
       const d = dec(i.bloc);
       const variante = (["clair", "sombre", "inverse"] as const)[d.variante] || "clair";
-      const html = documentGabarit(g, i.params || {}, vars, variante, { anime: true, transparent: true });
-      return { html, duree: dureeDe(g), empreinte: empreinte(html) };
+      const html = documentGabarit(g, i.params || {}, vars, variante, { anime: true, transparent: mode === "transparent" });
+      return { html, duree: dureeDe(g), empreinte: empreinteRendu(html, mode) };
     }
-    return a.html ? { html: a.html, duree: a.dureeAnim || DUREE_ANIMATION, empreinte: empreinte(a.html) } : null;
+    return a.html ? { html: a.html, duree: a.dureeAnim || DUREE_ANIMATION, empreinte: empreinteRendu(a.html, mode) } : null;
   };
   const vivants = useMemo(() => {
     const m: Record<string, ReturnType<typeof vivant>> = {};
     for (const a of prod?.articles || []) m[a.fichier] = vivant(a);
     return m;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prod?.articles, plan, vars, gabaritPour]);
+  }, [prod?.articles, plan, vars, gabaritPour, mode]);
   const disponible = (a: ArticleProd) => {
     const v = vivants[a.fichier];
     return Boolean(v && (enCache(cle(projet.id, a.fichier), v.empreinte) || (a.movChemin && a.empreinte === v.empreinte)));
@@ -180,6 +184,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
   };
   /* L'aperçu vidéo de chaque gabarit rendu : en mémoire dans l'onglet, sinon sur le compte. */
   const [apercus, setApercus] = useState<Record<string, string>>({});
+  const [affiches, setAffiches] = useState<Record<string, string>>({});
   const [tour, setTour] = useState(0);
   const lances = useRef(new Set<string>());
   useEffect(() => {
@@ -198,13 +203,14 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       lances.current.add(a.fichier);
       setRendus(q => ({ ...q, [a.fichier]: "en-cours" }));
       try {
-        const f = await rendre(projet.id, { html: v.html, fichier: a.fichier, duree: v.duree });
+        const f = await rendre(projet.id, { html: v.html, fichier: a.fichier, duree: v.duree, mode });
         setRendus(q => ({ ...q, [a.fichier]: "pret" }));
+        if (f.png) setAffiches(q => ({ ...q, [a.fichier]: URL.createObjectURL(f.png!) }));
         if (f.apercu) setApercus(q => ({ ...q, [a.fichier]: URL.createObjectURL(f.apercu!) }));
         const chemins = await deposer(projet.id, a.fichier, f);
         const courant = prodRef.current;
         if (chemins && courant) {
-          onMaj({ ...courant, articles: courant.articles.map(x => x.fichier === a.fichier ? { ...x, movChemin: chemins.mov, pngChemin: chemins.png, apercuUrl: chemins.apercu, empreinte: v.empreinte } : x) });
+          onMaj({ ...courant, articles: courant.articles.map(x => x.fichier === a.fichier ? { ...x, movChemin: chemins.mov, pngChemin: chemins.png, apercuUrl: chemins.apercu, fixeUrl: chemins.fixe, empreinte: v.empreinte } : x) });
           // L'adresse du compte remplace le blob : elle survit au rechargement et se lit partout.
           if (chemins.apercu) setApercus(q => ({ ...q, [a.fichier]: chemins.apercu! }));
         }
@@ -230,7 +236,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     }
     setRendus(q => ({ ...q, [a.fichier]: "en-cours" }));
     try {
-      const f = await rendre(projet.id, { html: v.html, fichier: a.fichier, duree: v.duree });
+      const f = await rendre(projet.id, { html: v.html, fichier: a.fichier, duree: v.duree, mode });
       setRendus(q => ({ ...q, [a.fichier]: "pret" }));
       return f;
     } catch (e) {
@@ -281,7 +287,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
               z.file(`03-SOURCES/${x.name}`, await x.async("blob"));
             }));
           }
-          timeline.push(`${timecode(a)}  ${a.fichier}.mov  ·  motion ${vivants[a.fichier]!.duree} s  ·  piste V3, PAR-DESSUS le plan (fond transparent)`);
+          timeline.push(`${timecode(a)}  ${a.fichier}.mov  ·  motion ${vivants[a.fichier]!.duree} s  ·  ${mode === "transparent" ? "piste V3, PAR-DESSUS le plan (fond transparent)" : "piste V2, en coupe sur le plan (plein cadre, comme l'aperçu)"}`);
         }
       }
       z.file("00-LISEZMOI.txt",
@@ -360,6 +366,18 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
             <span>{enCours} en cours{enCours ? " · vérification toutes les 10 s" : ""}</span>
             {prod.articles.some(a => vivants[a.fichier]) && <span>gabarits rendus {prod.articles.filter(a => vivants[a.fichier] && rendus[a.fichier] === "pret").length}/{prod.articles.filter(a => vivants[a.fichier]).length}</span>}
           </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
+            <span className="eyebrow" style={{ marginRight: 4 }}>Rendu des gabarits</span>
+            <button className="pilule" aria-pressed={mode === "plein"} style={mode === "plein" ? { borderColor: "var(--accent)", color: "var(--accent)" } : undefined}
+                    onClick={() => changerMode("plein")} title="Le fichier ressemble à l'aperçu de la planche, fond compris. Se pose en coupe, comme un B-roll.">
+              Comme l'aperçu, plein cadre
+            </button>
+            <button className="pilule" aria-pressed={mode === "transparent"} style={mode === "transparent" ? { borderColor: "var(--accent)", color: "var(--accent)" } : undefined}
+                    onClick={() => changerMode("transparent")} title="Seul le composant est rendu, sans le fond du gabarit. Se superpose à votre plan face caméra.">
+              Fond transparent, à superposer
+            </button>
+            <span className="muet" style={{ fontSize: 12 }}>Changer de mode relance les rendus.</span>
+          </div>
           <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
             {prod.articles.map(a => (
               <div key={a.n} style={{ display: "grid", gridTemplateColumns: "minmax(200px, 1fr) 120px auto", gap: 14, alignItems: "center",
@@ -367,7 +385,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                 <div>
                   <div className="mono" style={{ fontSize: 12.5 }}>{a.fichier}.{a.moteur === "broll" ? "mp4" : "mov"}</div>
                   <div className="muet" style={{ fontSize: 11.5, marginTop: 2 }}>
-                    {a.moteur === "broll" ? `B-roll · ${a.duree}s${a.image ? " · depuis la vignette validée" : " · depuis le prompt seul"}` : `Motion · ${(LIBELLES as any)[a.forme]?.nom || a.forme}${vivants[a.fichier] ? ` · ${vivants[a.fichier]!.duree} s · .mov à fond transparent` : ""}`}
+                    {a.moteur === "broll" ? `B-roll · ${a.duree}s${a.image ? " · depuis la vignette validée" : " · depuis le prompt seul"}` : `Motion · ${(LIBELLES as any)[a.forme]?.nom || a.forme}${vivants[a.fichier] ? ` · ${vivants[a.fichier]!.duree} s · .mov ${mode === "transparent" ? "à fond transparent" : "plein cadre"}` : ""}`}
                     {a.erreur && !vivants[a.fichier] && <span style={{ color: a.statut === "echec" ? "var(--alerte)" : "var(--encre-3)" }}> — {a.erreur}</span>}
                   </div>
                 </div>
@@ -379,10 +397,12 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   {a.video && <video src={a.video} controls preload="metadata" style={{ width: 160, borderRadius: 8, background: "#000" }} />}
                   {vivants[a.fichier] && (() => {
-                    const src = apercus[a.fichier] || (a.empreinte === vivants[a.fichier]!.empreinte ? a.apercuUrl : undefined);
+                    const aJour = a.empreinte === vivants[a.fichier]!.empreinte;
+                    const src = apercus[a.fichier] || (aJour ? a.apercuUrl : undefined);
+                    const affiche = affiches[a.fichier] || (aJour ? a.fixeUrl : undefined);
                     const g = gabaritPour(a.forme); const ins = insertDe(a);
                     return src
-                      ? <video src={src} controls preload="metadata" style={{ width: 160, borderRadius: 8, background: "#3c3f3a" }} title="Aperçu du rendu, posé sur un gris neutre" />
+                      ? <video src={src} poster={affiche} controls preload="metadata" style={{ width: 160, borderRadius: 8, background: "#3c3f3a" }} title={mode === "transparent" ? "Aperçu du rendu transparent, posé sur un gris neutre" : "Aperçu du rendu"} />
                       : g && ins ? <div className="vignette" style={{ width: 160, borderRadius: 8, flex: "none" }} title="Aperçu animé du gabarit (survoler pour rejouer) — le rendu arrive">
                           <GabaritApercu gabarit={g} params={ins.params || {}} vars={vars} variante={(["clair", "sombre", "inverse"] as const)[dec(ins.bloc).variante] || "clair"} anime />
                         </div> : null;

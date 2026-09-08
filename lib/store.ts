@@ -52,11 +52,14 @@ export interface ArticleProd {
   pngChemin?: string;       // l'image fixe, idem
   empreinte?: string;       // empreinte du HTML rendu : si le gabarit change, on re-rend
   apercuUrl?: string;       // aperçu MP4 lisible dans le navigateur, sur le compte
+  fixeUrl?: string;         // l'image fixe (état final), affiche de l'aperçu
 }
 
 export interface Production {
   lancee: number;
   resolution: string;
+  /** transparent : seul le composant, à superposer au plan. plein (défaut) : comme l'aperçu, fond compris. */
+  mode?: "plein" | "transparent";
   articles: ArticleProd[];
 }
 
