@@ -131,6 +131,10 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     return candidats.filter(c => !dedans.has(c.bloc));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prod?.articles, candidats, plan]);
+  // Un insert gardé après le lancement rejoint la production de lui-même :
+  // les gabarits se rendent, les B-roll attendent le bouton « Lancer ces clips ».
+  useEffect(() => { if (nouveaux.length) ajouterNouveaux(); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [nouveaux.length]);
   function ajouterNouveaux() {
     if (!prod || !nouveaux.length) return;
     const k0 = prod.articles.length;
@@ -424,14 +428,11 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
           </div>
 
           {nouveaux.length > 0 && (
-            <div className="pourquoi" style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <span>{nouveaux.length > 1 ? `${nouveaux.length} inserts gardés depuis le lancement ne sont pas dans cette production.` : "1 insert gardé depuis le lancement n'est pas dans cette production."}</span>
-              <button className="btn fantome" style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={ajouterNouveaux}>Les ajouter</button>
-            </div>
+            <div className="pourquoi" style={{ marginTop: 12 }}>Ajout de {nouveaux.length} insert{nouveaux.length > 1 ? "s" : ""} gardé{nouveaux.length > 1 ? "s" : ""} depuis le lancement…</div>
           )}
           {prod.articles.some(a => a.moteur === "broll" && a.statut === "attente") && (
             <div className="pourquoi" style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <span>{prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente").length} clip{prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente").length > 1 ? "s" : ""} B-roll en attente de lancement.</span>
+              <span>{prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente").length} clip{prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente").length > 1 ? "s" : ""} B-roll ajouté{prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente").length > 1 ? "s" : ""} depuis le lancement : ils partent chez Seedance sur ce clic, avec leur devis.</span>
               <button className="btn" style={{ padding: "6px 12px", fontSize: 12.5 }} disabled={lancement === "en-cours"} onClick={lancerAttente}>
                 {lancement === "en-cours" ? "Envoi à Seedance…" : "Lancer ces clips"}
               </button>

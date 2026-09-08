@@ -11,6 +11,7 @@ import GabaritApercu from "./GabaritApercu";
 import { appelApi, lireJson } from "@/lib/api-client";
 import { ancrer } from "@/lib/medias";
 import { integre } from "@/lib/gabarits-integres";
+import { TARIFS } from "@/lib/tarifs";
 
 /** La consigne d'un clic : un gabarit sans mouvement propre en reçoit un. */
 const CONSIGNE_MOUVEMENT =
@@ -226,10 +227,12 @@ export default function Console({ initial }: { initial: Projet }) {
 
   /* La charte extraite est une proposition, pas un verdict : chaque valeur
      se corrige à la main, et la correction est conservée. */
+  const [charteEnregistree, setCharteEnregistree] = useState<number | null>(null);
   function majDa(patch: Partial<DA>) {
     const da = { ...projet.da, ...patch };
     setProjet(p => ({ ...p, da }));
     majProjet(projet.id, { da });
+    setCharteEnregistree(Date.now());
   }
 
   function majCadrage(patch: Partial<Projet["cadrage"]>) {
@@ -272,6 +275,10 @@ export default function Console({ initial }: { initial: Projet }) {
 
   const compte = (k: Etat) => plan.inserts.filter(i => dec(i.bloc).etat === k).length;
   const reste = plan.inserts.length - compte("oui") - compte("presque") - compte("non");
+  /* Ce qui est gardé mais pas encore dans la production lancée. */
+  const aAjouter = projet.production
+    ? plan.inserts.filter(i => dec(i.bloc).etat === "oui" && !projet.production!.articles.some(a => a.bloc === i.bloc)).length
+    : 0;
   const brolls = plan.inserts.filter(i => moteurDe(i) === "broll" && dec(i.bloc).etat !== "non");
   const motions = plan.inserts.filter(i => moteurDe(i) === "motion" && dec(i.bloc).etat !== "non");
   const secondes = brolls.reduce((t, i) => t + Math.min(i.duree, projet.cadrage.dureeMax), 0);
@@ -541,9 +548,15 @@ export default function Console({ initial }: { initial: Projet }) {
                        onChange={e => majDa({ rotation: e.target.value })} />
               </div>
             </div>
+            <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
+              <span className="pilule" style={{ color: "var(--accent)", borderColor: "var(--accent)" }}>
+                {charteEnregistree ? `Enregistré à ${new Date(charteEnregistree).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "Enregistré"}
+              </span>
+              <span className="muet" style={{ fontSize: 12.5 }}>Chaque modification est conservée dès la frappe, sur ce navigateur et sur votre compte. Les gabarits de la planche la reflètent aussitôt.</span>
+              <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }} onClick={() => setPorte(3)}>Voir sur la planche →</button>
+            </div>
             <p className="pourquoi">
-              Tout se corrige à la main et la correction est conservée. Les couleurs et les polices
-              n&apos;affectent que les gabarits motion ; seul le registre change les prompts de B-roll.
+              Les couleurs et les polices n&apos;affectent que les gabarits motion ; seul le registre change les prompts de B-roll.
             </p>
 
             <label className="eyebrow" style={{ display: "block", marginTop: 18 }}>Registre visuel des B-roll</label>
@@ -731,10 +744,10 @@ export default function Console({ initial }: { initial: Projet }) {
               return restantes > 0 ? (
                 <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
                   <button className="btn" disabled={enCours} onClick={genererToutes}>
-                    {enCours ? "Génération en cours…" : `Générer les vignettes · ${restantes} insert${restantes > 1 ? "s" : ""} × 3`}
+                    {enCours ? "Génération en cours…" : `Générer les images de référence · ${restantes} passage${restantes > 1 ? "s" : ""}`}
                   </button>
                   <span className="muet" style={{ fontSize: 12 }}>
-                    Trois images par insert, motion compris : chaque passage garde la porte de l'image-to-video ouverte. C'est l'étage bon marché — mais c'est une dépense, donc un clic.
+                    Trois images fixes par passage (Seedream, ≈ {(restantes * 3 * TARIFS.image).toFixed(2)} $). Pour un B-roll, l'image que vous choisissez devient la référence du clip : il lui ressemblera. Pour un motion, c'est une alternative en image, si elle vaut mieux que le gabarit. Rien ne se génère sans ce clic.
                   </span>
                   {genErreur && <span style={{ color: "var(--alerte)", fontSize: 12 }}>{genErreur}</span>}
                 </div>
@@ -845,11 +858,11 @@ export default function Console({ initial }: { initial: Projet }) {
                                 onClick={e => { e.stopPropagation(); genererVignettes(ins.n); }}>
                           {generation[ins.n] === "en-cours" ? "Génération…"
                             : d.etat === "presque" && d.note?.trim() ? "Relancer avec la retouche"
-                            : d.images ? "Régénérer les 3 vignettes" : "Générer les 3 vignettes"}
+                            : d.images ? "Refaire les 3 images" : moteurDe(ins) === "broll" ? "Générer 3 images de référence" : "Proposer 3 images à la place"}
                         </button>
                         {generation[ins.n] === "erreur" && <span style={{ color: "var(--alerte)", fontSize: 12 }}>échec — voir le message en haut</span>}
                         {!d.images && <span className="muet" style={{ fontSize: 12 }}>
-                          {moteurDe(ins) === "motion" ? "des images sont possibles ici aussi — générez-les pour comparer, puis basculez en B-roll si elles gagnent" : "aperçus factices tant que rien n'est généré"}
+                          {moteurDe(ins) === "motion" ? "trois images de ce passage, à comparer au gabarit ; si elles gagnent, basculez en B-roll" : "trois images de ce passage ; celle que vous choisissez guide le clip. Tant qu'elles ne sont pas générées, ces aperçus sont factices"}
                         </span>}
                       </div>
                     )}
@@ -917,7 +930,9 @@ export default function Console({ initial }: { initial: Projet }) {
                       onClick={() => { setProdOuverte(true); document.getElementById("production")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
                 {reste > 0 ? `Encore ${reste} à trancher`
                   : compte("oui") === 0 ? `Aucun insert gardé${compte("presque") ? ` · ${compte("presque")} à relancer` : ""}`
-                  : projet.production ? "Voir la production" : `Lancer la production · ${compte("oui")} insert${compte("oui") > 1 ? "s" : ""}`}
+                  : projet.production
+                    ? (aAjouter > 0 ? `Ajouter ${aAjouter} insert${aAjouter > 1 ? "s" : ""} à la production` : "Voir la production")
+                    : `Lancer la production · ${compte("oui")} insert${compte("oui") > 1 ? "s" : ""}`}
               </button>
             </div>
           </div>
