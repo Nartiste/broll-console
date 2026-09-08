@@ -173,6 +173,11 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
      sans qu'on le demande : un fichier prêt est un fichier téléchargeable.
      Le résultat est gardé en mémoire, et déposé sur le compte s'il y en a un. */
   const [rendus, setRendus] = useState<Record<string, "en-cours" | "pret" | "echec" | undefined>>({});
+  const [causes, setCauses] = useState<Record<string, string>>({});
+  const echouer = (fichier: string, e: unknown) => {
+    setRendus(q => ({ ...q, [fichier]: "echec" }));
+    setCauses(q => ({ ...q, [fichier]: e instanceof Error ? e.message : "Rendu impossible" }));
+  };
   /* L'aperçu vidéo de chaque gabarit rendu : en mémoire dans l'onglet, sinon sur le compte. */
   const [apercus, setApercus] = useState<Record<string, string>>({});
   const [tour, setTour] = useState(0);
@@ -201,8 +206,8 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
         if (chemins && courant) {
           onMaj({ ...courant, articles: courant.articles.map(x => x.fichier === a.fichier ? { ...x, movChemin: chemins.mov, pngChemin: chemins.png, apercuUrl: chemins.apercu, empreinte: v.empreinte } : x) });
         }
-      } catch {
-        setRendus(q => ({ ...q, [a.fichier]: "echec" }));
+      } catch (e) {
+        echouer(a.fichier, e);
         lances.current.delete(a.fichier);
       }
       await suivant();
@@ -226,8 +231,8 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       const f = await rendre(projet.id, { html: v.html, fichier: a.fichier, duree: v.duree });
       setRendus(q => ({ ...q, [a.fichier]: "pret" }));
       return f;
-    } catch {
-      setRendus(q => ({ ...q, [a.fichier]: "echec" }));
+    } catch (e) {
+      echouer(a.fichier, e);
       return null;
     }
   }
@@ -399,7 +404,10 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                         </button>
                       </>
                     ) : rendus[a.fichier] === "echec" ? (
-                      <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }} onClick={() => relancer(a)}>Réessayer le rendu</button>
+                      <>
+                        {causes[a.fichier] && <span className="muet" style={{ fontSize: 12, color: "var(--alerte)", maxWidth: 260 }}>{causes[a.fichier]}</span>}
+                        <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }} onClick={() => relancer(a)}>Réessayer le rendu</button>
+                      </>
                     ) : (
                       <span className="muet mono" style={{ fontSize: 12 }}>rendu en cours · jusqu'à 3 min</span>
                     )
