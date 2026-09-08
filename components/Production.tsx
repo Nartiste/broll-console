@@ -161,9 +161,9 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
     const ajout = nouveaux.map((c, k) => ({ ...c, fichier: `${String(k0 + k + 1).padStart(2, "0")}-${c.fichier.replace(/^\d+-/, "")}` }));
     onMaj({ ...prod, articles: [...prod.articles, ...ajout] });
   }
-  async function lancerAttente() {
+  async function lancerAttente(seulement?: ArticleProd) {
     if (!prod) return;
-    const attente = prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente");
+    const attente = prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente" && (!seulement || a.fichier === seulement.fichier));
     if (!attente.length) return;
     const sec = attente.reduce((t, c) => t + Math.max(4, Math.min(15, Math.round(c.duree))), 0);
     if (!confirm(`Lancer ${attente.length} clip${attente.length > 1 ? "s" : ""} Seedance en ${prod.resolution} — ${sec} secondes, ordre de grandeur ${(sec * (TARIFS.video[prod.resolution] ?? 0.09)).toFixed(2)} $ ?`)) return;
@@ -177,8 +177,9 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       if (!r.ok) throw new Error(c.erreur || "Lancement impossible");
       const parN = new Map<number, { tache?: string; erreur?: string }>((c.resultats as any[]).map(x => [x.n, x]));
       const courant = prodRef.current!;
+      const lances = new Set(attente.map(a => a.fichier));
       onMaj({ ...courant, articles: courant.articles.map(a => {
-        if (a.moteur !== "broll" || a.statut !== "attente") return a;
+        if (!lances.has(a.fichier)) return a;
         const x = parN.get(a.n);
         return x?.tache ? { ...a, statut: "file" as const, tache: x.tache } : { ...a, statut: "echec" as const, erreur: x?.erreur || "Refusé" };
       }) });
@@ -453,7 +454,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
           {prod.articles.some(a => a.moteur === "broll" && a.statut === "attente") && (
             <div className="pourquoi" style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <span>{prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente").length} clip{prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente").length > 1 ? "s" : ""} B-roll ajouté{prod.articles.filter(a => a.moteur === "broll" && a.statut === "attente").length > 1 ? "s" : ""} depuis le lancement : ils partent chez Seedance sur ce clic, avec leur devis.</span>
-              <button className="btn" style={{ padding: "6px 12px", fontSize: 12.5 }} disabled={lancement === "en-cours"} onClick={lancerAttente}>
+              <button className="btn" style={{ padding: "6px 12px", fontSize: 12.5 }} disabled={lancement === "en-cours"} onClick={() => lancerAttente()}>
                 {lancement === "en-cours" ? "Envoi à Seedance…" : "Lancer ces clips"}
               </button>
             </div>
@@ -509,6 +510,13 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                       </button>
                     );
                   })()}
+                  {a.moteur === "broll" && a.statut === "attente" && (
+                    <button className="btn" style={{ padding: "7px 12px", fontSize: 12.5 }} disabled={lancement === "en-cours"}
+                            title="Envoie ce clip à Seedance, avec l'image choisie en référence"
+                            onClick={() => lancerAttente(a)}>
+                      {lancement === "en-cours" ? "Envoi…" : `Lancer ce clip · ≈ ${(Math.max(4, Math.min(15, Math.round(a.duree))) * (TARIFS.video[prod.resolution] ?? 0.09)).toFixed(2)} $`}
+                    </button>
+                  )}
                   {a.video && !expiree(a.video) && <button className="btn fantome" style={{ padding: "7px 12px", fontSize: 12.5 }}
                                  onClick={async () => {
                                    const blob = await blobDepuis(a.video!);
