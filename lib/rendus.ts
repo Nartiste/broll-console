@@ -58,33 +58,29 @@ export async function rendre(projetId: string, a: { html: string; fichier: strin
 }
 
 /** Dépose le .mov et l'image fixe sur le compte. Null sans compte (ou sans espace de stockage). */
-export async function deposer(projetId: string, fichier: string, f: FichiersRendu): Promise<{ mov: string; png?: string; apercu?: string; fixe?: string } | null> {
+export async function deposer(projetId: string, fichier: string, f: FichiersRendu): Promise<{ mov?: string; png?: string; apercu?: string; fixe?: string } | null> {
   const sb = supabase();
   if (!sb) return null;
   const { data } = await sb.auth.getSession();
   const uid = data.session?.user?.id;
   if (!uid) return null;
   const base = `${uid}/${projetId}/${fichier}`;
-  const m = await sb.storage.from("rendus").upload(`${base}.mov`, f.mov, { upsert: true, contentType: "video/quicktime" });
-  if (m.error) return null;
-  let png: string | undefined;
-  if (f.png) {
-    const p = await sb.storage.from("rendus").upload(`${base}.png`, f.png, { upsert: true, contentType: "image/png" });
-    if (!p.error) png = `${base}.png`;
-  }
-  // L'aperçu va dans l'espace public : c'est une adresse que la balise vidéo lit directement.
-  let apercu: string | undefined;
+  const res: { mov?: string; png?: string; apercu?: string; fixe?: string } = {};
+  // Les petits fichiers d'abord — l'aperçu et son affiche — pour qu'ils soient
+  // là même si le .mov, lourd, n'arrive pas au bout.
   if (f.apercu) {
     const a = await sb.storage.from("medias").upload(`${base}-apercu.mp4`, f.apercu, { upsert: true, contentType: "video/mp4" });
-    if (!a.error) apercu = sb.storage.from("medias").getPublicUrl(`${base}-apercu.mp4`).data.publicUrl;
+    if (!a.error) res.apercu = sb.storage.from("medias").getPublicUrl(`${base}-apercu.mp4`).data.publicUrl;
   }
-  // L'image fixe en public aussi : c'est l'affiche de l'aperçu vidéo.
-  let fixe: string | undefined;
   if (f.png) {
     const x = await sb.storage.from("medias").upload(`${base}-fixe.png`, f.png, { upsert: true, contentType: "image/png" });
-    if (!x.error) fixe = sb.storage.from("medias").getPublicUrl(`${base}-fixe.png`).data.publicUrl;
+    if (!x.error) res.fixe = sb.storage.from("medias").getPublicUrl(`${base}-fixe.png`).data.publicUrl;
+    const p = await sb.storage.from("rendus").upload(`${base}.png`, f.png, { upsert: true, contentType: "image/png" });
+    if (!p.error) res.png = `${base}.png`;
   }
-  return { mov: `${base}.mov`, png, apercu, fixe };
+  const m = await sb.storage.from("rendus").upload(`${base}.mov`, f.mov, { upsert: true, contentType: "video/quicktime" });
+  if (!m.error) res.mov = `${base}.mov`;
+  return res;
 }
 
 /** Un fichier déposé sur le compte, rapatrié. Null s'il n'y est pas (ou plus). */

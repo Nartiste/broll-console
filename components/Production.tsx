@@ -103,7 +103,9 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
       const variante = (["clair", "sombre", "inverse"] as const)[d.variante] || "clair";
       // Un passage dont l'analyse n'a pas donné les paramètres de cette forme
       // (moteur ou forme changés après coup) reçoit une lecture de son texte.
-      const params = i.params && Object.keys(i.params).length ? i.params : paramsPour(a.forme as any, i.texte, i.section);
+      // Les paramètres de l'analyse ne valent que pour la forme qu'elle avait choisie :
+      // si l'auteur a imposé une autre forme, on relit le texte pour celle-ci.
+      const params = i.forme === a.forme && i.params && Object.keys(i.params).length ? i.params : paramsPour(a.forme as any, i.texte, i.section);
       const html = documentGabarit(g, params, vars, variante, { anime: true, transparent: mode === "transparent" });
       return { html, duree: dureeDe(g), empreinte: empreinteRendu(html, mode) };
     }
@@ -261,7 +263,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
         const chemins = await deposer(projet.id, a.fichier, f);
         const courant = prodRef.current;
         if (chemins && courant) {
-          onMaj({ ...courant, articles: courant.articles.map(x => x.fichier === a.fichier ? { ...x, movChemin: chemins.mov, pngChemin: chemins.png, apercuUrl: chemins.apercu, fixeUrl: chemins.fixe, empreinte: v.empreinte } : x) });
+          onMaj({ ...courant, articles: courant.articles.map(x => x.fichier === a.fichier ? { ...x, movChemin: chemins.mov || x.movChemin, pngChemin: chemins.png, apercuUrl: chemins.apercu, fixeUrl: chemins.fixe, empreinte: chemins.mov ? v.empreinte : x.empreinte } : x) });
           // L'adresse du compte remplace le blob : elle survit au rechargement et se lit partout.
           if (chemins.apercu) setApercus(q => ({ ...q, [a.fichier]: chemins.apercu! }));
         }
