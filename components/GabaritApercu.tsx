@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { document as documentGabarit, type Gabarit, type Variante } from "@/lib/gabarits";
+import { document as documentGabarit, peintLeFond, type Gabarit, type Variante } from "@/lib/gabarits";
 
 /**
  * Rendu d'un gabarit sur mesure dans une iframe isolée : sans script, sans
@@ -17,10 +17,12 @@ import { document as documentGabarit, type Gabarit, type Variante } from "@/lib/
  * le champ et au survol.
  */
 export default function GabaritApercu({
-  gabarit, params, vars, sombre = false, variante, anime = false,
-}: { gabarit: Gabarit; params: Record<string, any>; vars: Record<string, string>; sombre?: boolean; variante?: Variante; anime?: boolean }) {
+  gabarit, params, vars, sombre = false, variante, anime = false, transparent = false,
+}: { gabarit: Gabarit; params: Record<string, any>; vars: Record<string, string>; sombre?: boolean; variante?: Variante; anime?: boolean; transparent?: boolean }) {
   const mode: Variante = variante || (sombre ? "sombre" : "clair");
-  const doc = useMemo(() => documentGabarit(gabarit, params, vars, mode, { anime }), [gabarit, params, vars, mode, anime]);
+  // Transparent : ce que le montage recevra — le composant seul, sans le fond du
+  // gabarit ni celui de la page, sur un damier qui dit la transparence.
+  const doc = useMemo(() => documentGabarit(gabarit, params, vars, mode, { anime, transparent, sansFond: transparent && peintLeFond(gabarit.css) }), [gabarit, params, vars, mode, anime, transparent]);
   const cadre = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(!anime);
   const [prise, setPrise] = useState(0);
@@ -36,7 +38,7 @@ export default function GabaritApercu({
   }, [anime]);
 
   return (
-    <div ref={cadre} style={{ width: "100%", height: "100%" }}
+    <div ref={cadre} className={transparent ? "damier" : undefined} style={{ width: "100%", height: "100%" }}
          onMouseEnter={() => { if (anime) setPrise(p => p + 1); }}
          title={anime ? "Survoler pour rejouer" : undefined}>
       {visible && (

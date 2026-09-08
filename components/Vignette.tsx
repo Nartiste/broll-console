@@ -199,7 +199,7 @@ export default function Vignette({ ins, i, accent, gabarit, vars, image }: {
     <div className="vignette">
       {ins.moteur === "motion" ? (
         vars && (gabarit || integre(ins.forme))
-          ? <GabaritApercu gabarit={(gabarit || integre(ins.forme))!} params={ins.params || {}} vars={vars} variante={(["clair", "sombre", "inverse"] as const)[i] || "clair"} anime />
+          ? <GabaritApercu gabarit={(gabarit || integre(ins.forme))!} params={ins.params || {}} vars={vars} variante={(["clair", "sombre", "inverse"] as const)[i] || "clair"} anime transparent />
           : <Comp forme={ins.forme} params={ins.params} i={i} />
       ) : image ? (
         <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />

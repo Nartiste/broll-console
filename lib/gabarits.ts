@@ -184,6 +184,7 @@ export function document(
   const fond = opts.transparent ? "transparent" : "var(--da-fond)";
   return `<!doctype html><meta charset="utf-8">${lienPolices(vars)}<style>
 :root{${racine}}
+html{color-scheme:dark}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:${fond};color:var(--da-encre);font-family:var(--da-titre);font-size:4vw}
 *{box-sizing:border-box}
 .g{width:100%;height:100%;position:relative}

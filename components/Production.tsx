@@ -478,7 +478,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
                       <button className="apercu-rendu" title={src ? "Voir le rendu en grand" : "Le rendu arrive — état final du gabarit"}
                               onClick={() => setGrand({ fichier: a.fichier, src, affiche, gabarit: g, params, variante })}>
                         {affiche ? <img src={affiche} alt="" />
-                          : g && ins ? <div className="vignette"><GabaritApercu gabarit={g} params={params} vars={vars} variante={variante} /></div> : null}
+                          : g && ins ? <div className="vignette"><GabaritApercu gabarit={g} params={params} vars={vars} variante={variante} transparent={mode === "transparent"} /></div> : null}
                         <span className="lecture">{src ? "▶" : "…"}</span>
                       </button>
                     );
@@ -535,7 +535,7 @@ export default function Production({ projet, plan, dec, vars, gabaritPour, onMaj
             </div>
             {grand.src
               ? <video src={grand.src} poster={grand.affiche} controls autoPlay playsInline style={{ width: "100%", aspectRatio: "16/9", borderRadius: 10, background: "#3c3f3a" }} />
-              : grand.gabarit ? <div className="vignette" style={{ borderRadius: 10 }}><GabaritApercu gabarit={grand.gabarit} params={grand.params} vars={vars} variante={grand.variante} anime /></div> : null}
+              : grand.gabarit ? <div className="vignette" style={{ borderRadius: 10 }}><GabaritApercu gabarit={grand.gabarit} params={grand.params} vars={vars} variante={grand.variante} anime transparent={mode === "transparent"} /></div> : null}
           </div>
         </div>
       )}
